@@ -1,14 +1,14 @@
 app_name = "custom_helpdesk"
 app_title = "Custom Helpdesk"
 app_publisher = "ahmad900mohammad@gmail.com"
-app_description = "customized helpdesk"
+app_description = "Reusable Helpdesk extension connecting Frappe Helpdesk to ERPNext (timesheets, billing, invoicing)"
 app_email = "ahmad900mohammad@gmail.com"
 app_license = "mit"
 
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["helpdesk"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -43,7 +43,9 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+    "Customer": "js_scripts/customer.js",
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -135,15 +137,37 @@ app_license = "mit"
 
 # Document Events
 # ---------------
-# Hook on document methods and events
+doc_events = {
+    # Sync ERPNext Customer → HD Customer
+    "Customer": {
+        "after_insert": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
+        "after_save": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
+    },
+    # Mark contacts created from Helpdesk portal with Supportkontakt + aus_supportvorgang
+    "Contact": {
+        "after_insert": "custom_helpdesk.python_scripts.sync.contact_sync.after_contact_insert",
+    },
+    # Mark addresses created from Helpdesk context with aus_supportvorgang
+    "Address": {
+        "after_insert": "custom_helpdesk.python_scripts.sync.address_sync.after_address_insert",
+    },
+}
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+# Fixtures — custom fields applied on migrate
+fixtures = [
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["name", "in", [
+                "Contact-aus_supportvorgang",
+                "Contact-supportkontakt",
+                "Address-aus_supportvorgang",
+                "Customer-helpdesk_domain",
+                "Customer-dienstleistungskontingent",
+            ]],
+        ],
+    },
+]
 
 # Scheduled Tasks
 # ---------------
