@@ -46,6 +46,9 @@ required_apps = ["helpdesk"]
 doctype_js = {
     "Customer": "js_scripts/customer.js",
 }
+doctype_list_js = {
+    "Contact": "js_scripts/contact_list.js",
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
