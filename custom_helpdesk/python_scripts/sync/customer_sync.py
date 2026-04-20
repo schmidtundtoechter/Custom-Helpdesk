@@ -32,6 +32,14 @@ def sync_to_hd_customer(doc, method=None):
         frappe.flags.custom_helpdesk_syncing = False
 
 
+def after_customer_rename(doc, method=None, old=None, new=None, merge=None):
+    """Called after_rename on ERPNext Customer. Renames the matching HD Customer."""
+    if frappe.flags.in_patch or frappe.flags.in_install or frappe.flags.in_migrate:
+        return
+    if old and new and frappe.db.exists("HD Customer", old):
+        frappe.rename_doc("HD Customer", old, new, force=True)
+
+
 def _sync(erp_customer):
     hd_customer_name = erp_customer.name  # HD Customer uses customer name as key
 

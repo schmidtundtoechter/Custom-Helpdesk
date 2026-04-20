@@ -145,6 +145,7 @@ doc_events = {
     "Customer": {
         "after_insert": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
         "after_save": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
+        "after_rename": "custom_helpdesk.python_scripts.sync.customer_sync.after_customer_rename",
     },
     # Mark contacts created from Helpdesk portal with Supportkontakt + aus_supportvorgang
     "Contact": {
