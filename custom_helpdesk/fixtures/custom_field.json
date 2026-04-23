@@ -65,5 +65,76 @@
     "in_list_view": 0,
     "print_hide": 0,
     "name": "Customer-dienstleistungskontingent"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "options": "Project",
+    "insert_after": "agent_group",
+    "in_list_view": 0,
+    "in_standard_filter": 1,
+    "print_hide": 0,
+    "name": "HD Ticket-project"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "support_category",
+    "fieldtype": "Link",
+    "label": "Support Category",
+    "options": "Support Category",
+    "insert_after": "project",
+    "in_list_view": 0,
+    "in_standard_filter": 1,
+    "print_hide": 0,
+    "name": "HD Ticket-support_category"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "support_time_logs_section",
+    "fieldtype": "Section Break",
+    "label": "Support Time Logs",
+    "insert_after": "support_category",
+    "name": "HD Ticket-support_time_logs_section"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "support_time_logs",
+    "fieldtype": "Table",
+    "label": "Support Time Logs",
+    "options": "Support Time Log",
+    "insert_after": "support_time_logs_section",
+    "name": "HD Ticket-support_time_logs"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "total_support_time",
+    "fieldtype": "Float",
+    "label": "Total Support Time (h)",
+    "insert_after": "support_time_logs",
+    "read_only": 1,
+    "precision": "2",
+    "description": "Sum of all effective hours × multiplier for uninvoiced, unlocked rows",
+    "print_hide": 1,
+    "name": "HD Ticket-total_support_time"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "unbezahlte_supportzeit",
+    "fieldtype": "Float",
+    "label": "Unbezahlte Supportzeit (h)",
+    "insert_after": "total_support_time",
+    "read_only": 1,
+    "precision": "2",
+    "description": "Total uninvoiced support hours on this ticket",
+    "print_hide": 1,
+    "name": "HD Ticket-unbezahlte_supportzeit"
   }
 ]

@@ -1,0 +1,47 @@
+[
+  {
+    "doctype": "HD Ticket Status",
+    "name": "Offen",
+    "enabled": 1,
+    "label_agent": "Offen",
+    "order": 10,
+    "color": "Red",
+    "category": "Active"
+  },
+  {
+    "doctype": "HD Ticket Status",
+    "name": "In Bearbeitung",
+    "enabled": 1,
+    "label_agent": "In Bearbeitung",
+    "order": 20,
+    "color": "Orange",
+    "category": "Active"
+  },
+  {
+    "doctype": "HD Ticket Status",
+    "name": "Wartend",
+    "enabled": 1,
+    "label_agent": "Wartend",
+    "order": 30,
+    "color": "Yellow",
+    "category": "Active"
+  },
+  {
+    "doctype": "HD Ticket Status",
+    "name": "Vorübergehend geschlossen",
+    "enabled": 1,
+    "label_agent": "Vorübergehend geschlossen",
+    "order": 40,
+    "color": "Purple",
+    "category": "Closed"
+  },
+  {
+    "doctype": "HD Ticket Status",
+    "name": "Geschlossen",
+    "enabled": 1,
+    "label_agent": "Geschlossen",
+    "order": 50,
+    "color": "Gray",
+    "category": "Closed"
+  }
+]

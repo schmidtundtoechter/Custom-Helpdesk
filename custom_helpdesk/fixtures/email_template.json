@@ -1,0 +1,16 @@
+[
+  {
+    "doctype": "Email Template",
+    "name": "Helpdesk Closed Ticket Auto-Reply DE",
+    "subject": "Ihr Support-Ticket ist geschlossen",
+    "response": "Vielen Dank für Ihre Nachricht. Sie haben auf ein bereits geschlossenes Support-Ticket geantwortet. Bitte beachten Sie, dass Anfragen über geschlossene Tickets von uns nicht weiter bearbeitet werden können. Wir bitten Sie daher, eine neue Anfrage zu erstellen und uns diese zuzusenden. So stellen Sie sicher, dass Ihr Anliegen korrekt erfasst wird und wir uns schnellstmöglich darum kümmern können. Vielen Dank für Ihr Verständnis.",
+    "use_html": 0
+  },
+  {
+    "doctype": "Email Template",
+    "name": "Helpdesk Closed Ticket Auto-Reply EN",
+    "subject": "Your support ticket is closed",
+    "response": "Thank you for your message. You have replied to a support ticket that has already been closed. Please note that we are unable to process enquiries regarding closed tickets. We therefore ask you to create a new enquiry and send it to us. This will ensure that your issue is recorded correctly and that we can address it as soon as possible. Thank you for your understanding.",
+    "use_html": 0
+  }
+]

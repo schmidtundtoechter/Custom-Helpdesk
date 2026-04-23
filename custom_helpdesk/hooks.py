@@ -45,6 +45,7 @@ required_apps = ["frappe/helpdesk"]
 # include js in doctype views
 doctype_js = {
     "Customer": "js_scripts/customer.js",
+    "HD Ticket": "js_scripts/hd_ticket.js",
 }
 doctype_list_js = {
     "Contact": "js_scripts/contact_list.js",
@@ -143,8 +144,9 @@ doctype_list_js = {
 doc_events = {
     # Sync ERPNext Customer → HD Customer
     "Customer": {
+        "before_save": "custom_helpdesk.python_scripts.sync.customer_sync.before_customer_save",
         "after_insert": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
-        "after_save": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
+        "on_update": "custom_helpdesk.python_scripts.sync.customer_sync.sync_to_hd_customer",
         "after_rename": "custom_helpdesk.python_scripts.sync.customer_sync.after_customer_rename",
     },
     # Mark contacts created from Helpdesk portal with Supportkontakt + aus_supportvorgang
@@ -154,6 +156,14 @@ doc_events = {
     # Mark addresses created from Helpdesk context with aus_supportvorgang
     "Address": {
         "after_insert": "custom_helpdesk.python_scripts.sync.address_sync.after_address_insert",
+    },
+    # HD Ticket: status transition validation + time totals recompute
+    "HD Ticket": {
+        "before_save": "custom_helpdesk.python_scripts.overrides.ticket_override.before_save",
+    },
+    # Incoming email: handle replies to closed / temp-closed tickets
+    "Communication": {
+        "before_insert": "custom_helpdesk.python_scripts.overrides.email_handler.before_communication_insert",
     },
 }
 
@@ -168,6 +178,33 @@ fixtures = [
                 "Address-aus_supportvorgang",
                 "Customer-helpdesk_domain",
                 "Customer-dienstleistungskontingent",
+                "HD Ticket-project",
+                "HD Ticket-support_category",
+                "HD Ticket-support_time_logs_section",
+                "HD Ticket-support_time_logs",
+                "HD Ticket-total_support_time",
+                "HD Ticket-unbezahlte_supportzeit",
+            ]],
+        ],
+    },
+    {
+        "doctype": "HD Ticket Status",
+        "filters": [
+            ["name", "in", [
+                "Offen",
+                "In Bearbeitung",
+                "Wartend",
+                "Vorübergehend geschlossen",
+                "Geschlossen",
+            ]],
+        ],
+    },
+    {
+        "doctype": "Email Template",
+        "filters": [
+            ["name", "in", [
+                "Helpdesk Closed Ticket Auto-Reply DE",
+                "Helpdesk Closed Ticket Auto-Reply EN",
             ]],
         ],
     },
@@ -176,23 +213,12 @@ fixtures = [
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"custom_helpdesk.tasks.all"
-# 	],
-# 	"daily": [
-# 		"custom_helpdesk.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"custom_helpdesk.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"custom_helpdesk.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"custom_helpdesk.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+    "daily": [
+        # Auto-close 'Vorübergehend geschlossen' tickets older than 21 days
+        "custom_helpdesk.python_scripts.overrides.ticket_override.auto_close_temp_closed_tickets",
+    ],
+}
 
 # Testing
 # -------

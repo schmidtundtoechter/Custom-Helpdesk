@@ -1,0 +1,159 @@
+{
+ "actions": [],
+ "creation": "2026-04-19 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "start_time",
+  "end_time",
+  "duration",
+  "manual_override",
+  "effective_duration",
+  "col_break_1",
+  "staff_member",
+  "entered_by",
+  "multiplier",
+  "price_category",
+  "total_cost",
+  "sec_break_flags",
+  "ruecksprache_erforderlich",
+  "is_locked",
+  "is_invoiced",
+  "timesheet_ref",
+  "buchen_timestamp"
+ ],
+ "fields": [
+  {
+   "fieldname": "start_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Start Time"
+  },
+  {
+   "fieldname": "end_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "End Time"
+  },
+  {
+   "fieldname": "duration",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Duration (h)",
+   "precision": "2",
+   "read_only": 1,
+   "description": "Auto-calculated from Start/End time"
+  },
+  {
+   "fieldname": "manual_override",
+   "fieldtype": "Float",
+   "label": "Manual Override (h)",
+   "precision": "2",
+   "description": "If set, overrides the timer-calculated duration"
+  },
+  {
+   "fieldname": "effective_duration",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Effective Duration (h)",
+   "precision": "2",
+   "read_only": 1,
+   "description": "Manual Override if set, otherwise Duration"
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "staff_member",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Staff Member",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "entered_by",
+   "fieldtype": "Link",
+   "label": "Entered By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "multiplier",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Multiplier",
+   "options": "1\n2\n3\n4\n5"
+  },
+  {
+   "fieldname": "price_category",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Price Category",
+   "options": "Support Price Category"
+  },
+  {
+   "fieldname": "total_cost",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Cost (€)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_break_flags",
+   "fieldtype": "Section Break",
+   "label": "Flags"
+  },
+  {
+   "default": "0",
+   "fieldname": "ruecksprache_erforderlich",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Rücksprache erforderlich",
+   "description": "If checked, this row stays editable after Buchen"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_locked",
+   "fieldtype": "Check",
+   "label": "Locked",
+   "read_only": 1,
+   "description": "Locked after Buchen (unless Rücksprache is set)"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_invoiced",
+   "fieldtype": "Check",
+   "label": "Invoiced",
+   "read_only": 1
+  },
+  {
+   "fieldname": "timesheet_ref",
+   "fieldtype": "Link",
+   "label": "Timesheet",
+   "options": "Timesheet",
+   "read_only": 1
+  },
+  {
+   "fieldname": "buchen_timestamp",
+   "fieldtype": "Datetime",
+   "label": "Booked On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "is_child_table": 1,
+ "links": [],
+ "modified": "2026-04-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Custom Helpdesk",
+ "name": "Support Time Log",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
