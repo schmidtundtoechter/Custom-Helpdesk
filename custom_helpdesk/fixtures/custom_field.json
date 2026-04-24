@@ -15,18 +15,16 @@
   },
   {
     "doctype": "Custom Field",
-    "dt": "Contact",
-    "fieldname": "supportkontakt",
-    "fieldtype": "Check",
-    "label": "Supportkontakt",
-    "description": "Dieser Kontakt wurde über das Helpdesk-Portal erstellt. In ERPNext standardmäßig ausgeblendet.",
-    "default": "0",
-    "insert_after": "aus_supportvorgang",
-    "hidden": 0,
-    "in_list_view": 0,
-    "in_standard_filter": 1,
+    "dt": "HD Customer",
+    "fieldname": "custom_erp_customer",
+    "fieldtype": "Link",
+    "options": "Customer",
+    "label": "ERP Customer",
+    "description": "The linked ERPNext Customer record. Used to reliably sync name/domain changes.",
+    "insert_after": "domain",
+    "hidden": 1,
     "print_hide": 1,
-    "name": "Contact-supportkontakt"
+    "name": "HD Customer-custom_erp_customer"
   },
   {
     "doctype": "Custom Field",

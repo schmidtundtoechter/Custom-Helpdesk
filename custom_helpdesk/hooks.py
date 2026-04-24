@@ -174,8 +174,8 @@ fixtures = [
         "filters": [
             ["name", "in", [
                 "Contact-aus_supportvorgang",
-                "Contact-supportkontakt",
                 "Address-aus_supportvorgang",
+                "HD Customer-custom_erp_customer",
                 "Customer-helpdesk_domain",
                 "Customer-dienstleistungskontingent",
                 "HD Ticket-project",
