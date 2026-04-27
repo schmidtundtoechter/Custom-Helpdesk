@@ -37,7 +37,7 @@ def buchen(ticket_name):
         row.timesheet_ref = timesheet.name
         row.buchen_timestamp = now
         if not row.ruecksprache_erforderlich:
-            row.is_locked = 1
+            row.set("is_locked", 1)
 
     ticket.flags.ignore_permissions = True
     ticket.save()
