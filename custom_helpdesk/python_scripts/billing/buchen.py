@@ -98,6 +98,7 @@ def _create_timesheet(ticket, rows, customer_name):
             ),
         })
 
+    ts.flags.ignore_links = True
     ts.insert(ignore_permissions=True)
     return ts
 
