@@ -71,12 +71,12 @@ def _create_timesheet(ticket, rows, customer_name):
             pc = frappe.db.get_value(
                 "Support Price Category",
                 row.price_category,
-                ["price_per_hour", "time_code"],
+                ["price_per_hour", "time_code", "activity_type"],
                 as_dict=True,
             )
             if pc:
                 price_per_hour = pc.price_per_hour or 0
-                time_code = pc.time_code or ""
+                time_code = pc.activity_type or pc.time_code or "Support"
 
         effective = float(row.effective_duration or 0)
         multiplier = int(row.multiplier or 1)

@@ -9,6 +9,7 @@
   "time_code",
   "category_name",
   "price_per_hour",
+  "activity_type",
   "description",
   "is_active"
  ],
@@ -33,6 +34,12 @@
    "in_list_view": 1,
    "label": "Price per Hour (€)",
    "reqd": 1
+  },
+  {
+   "fieldname": "activity_type",
+   "fieldtype": "Link",
+   "options": "Activity Type",
+   "label": "Activity Type (ERPNext)"
   },
   {
    "fieldname": "description",
