@@ -76,7 +76,7 @@ def _create_timesheet(ticket, rows, customer_name):
             )
             if pc:
                 price_per_hour = pc.price_per_hour or 0
-                time_code = pc.activity_type or pc.time_code or "Support"
+                time_code = pc.activity_type or "Support"
 
         effective = float(row.effective_duration or 0)
         multiplier = int(row.multiplier or 1)
