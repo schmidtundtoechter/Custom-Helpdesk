@@ -90,7 +90,7 @@ function _recalculate_totals(frm) {
         const eff = parseFloat(row.effective_duration || 0);
         const mult = parseInt(row.multiplier || 1);
         const hours = eff * mult;
-        if (!row.is_locked) total += hours;
+        if (!row.gesperrt) total += hours;
         if (!row.is_invoiced) unbilled += hours;
     }
     frm.set_value("total_support_time", Math.round(total * 100) / 100);
@@ -103,7 +103,7 @@ function _add_buchen_button(frm) {
     if (frm.doc.docstatus !== 0 || frm.is_new()) return;
 
     const unbookable = (frm.doc.support_time_logs || []).filter(
-        r => !r.is_locked && !r.is_invoiced
+        r => !r.gesperrt && !r.is_invoiced
     );
     if (!unbookable.length) return;
 

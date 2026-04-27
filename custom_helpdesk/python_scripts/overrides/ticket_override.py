@@ -57,7 +57,7 @@ def _recompute_time_totals(doc):
         effective = float(row.get("effective_duration") or 0)
         multiplier = int(row.get("multiplier") or 1)
         hours = effective * multiplier
-        if not row.get("is_locked"):
+        if not row.get("gesperrt"):
             total += hours
         if not row.get("is_invoiced"):
             unbilled += hours

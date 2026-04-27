@@ -19,7 +19,7 @@
   "total_cost",
   "sec_break_flags",
   "ruecksprache_erforderlich",
-  "is_locked",
+  "gesperrt",
   "is_invoiced",
   "timesheet_ref",
   "buchen_timestamp"
@@ -117,7 +117,7 @@
   },
   {
    "default": "0",
-   "fieldname": "is_locked",
+   "fieldname": "gesperrt",
    "fieldtype": "Check",
    "label": "Locked",
    "read_only": 1,

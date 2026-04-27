@@ -23,7 +23,7 @@ def buchen(ticket_name):
     ticket = frappe.get_doc("HD Ticket", ticket_name)
     rows = [
         r for r in (ticket.get("support_time_logs") or [])
-        if not r.is_locked and not r.is_invoiced
+        if not r.gesperrt and not r.is_invoiced
     ]
 
     if not rows:
@@ -37,7 +37,7 @@ def buchen(ticket_name):
         row.timesheet_ref = timesheet.name
         row.buchen_timestamp = now
         if not row.ruecksprache_erforderlich:
-            row.set("is_locked", 1)
+            row.set("gesperrt", 1)
 
     ticket.flags.ignore_permissions = True
     ticket.save()
