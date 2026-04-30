@@ -91,6 +91,8 @@ doctype_list_js = {
 # before_install = "custom_helpdesk.install.before_install"
 # after_install = "custom_helpdesk.install.after_install"
 
+after_migrate = ["custom_helpdesk.install.patch_helpdesk_index"]
+
 # Uninstallation
 # ------------
 
@@ -179,6 +181,7 @@ fixtures = [
                 "Customer-helpdesk_domain",
                 "Customer-dienstleistungskontingent",
                 "HD Ticket-project",
+                "HD Ticket-project_manager",
                 "HD Ticket-support_category",
                 "HD Ticket-support_time_logs_section",
                 "HD Ticket-support_time_logs",

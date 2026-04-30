@@ -24,7 +24,6 @@
    "label": "Description"
   },
   {
-   "fieldname": "is_active",
    "default": "1",
    "fieldname": "is_active",
    "fieldtype": "Check",

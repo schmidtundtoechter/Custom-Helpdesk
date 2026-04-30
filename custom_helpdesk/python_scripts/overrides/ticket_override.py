@@ -20,6 +20,7 @@ AUTO_CLOSE_DAYS = 21
 def before_save(doc, method=None):
     _validate_status_transition(doc)
     _recompute_time_totals(doc)
+    _add_multiplier_comments(doc)
 
 
 def _validate_status_transition(doc):
@@ -63,6 +64,49 @@ def _recompute_time_totals(doc):
             unbilled += hours
     doc.total_support_time = round(total, 2)
     doc.unbezahlte_supportzeit = round(unbilled, 2)
+
+
+def _add_multiplier_comments(doc):
+    """
+    When a time log row has multiplier > 1 and the multiplier changed (or the row is new),
+    post a visible comment to the ticket activity feed.
+    """
+    if doc.is_new():
+        return
+
+    existing_db = {
+        r["name"]: r
+        for r in frappe.get_all(
+            "Support Time Log",
+            filters={"parent": doc.name},
+            fields=["name", "multiplier"],
+        )
+    }
+
+    for row in doc.get("support_time_logs") or []:
+        mult = int(row.get("multiplier") or 1)
+        if mult <= 1:
+            continue
+
+        db_row = existing_db.get(row.name)
+        db_mult = int(db_row.get("multiplier") or 1) if db_row else None
+        is_new_row = db_row is None
+        mult_changed = is_new_row or db_mult != mult
+
+        if not mult_changed:
+            continue
+
+        eff = round(float(row.get("effective_duration") or row.get("duration") or 0), 2)
+        total = round(eff * mult, 2)
+
+        pc_label = row.price_category or "–"
+        if row.price_category:
+            cat_name = frappe.db.get_value("Support Price Category", row.price_category, "category_name")
+            if cat_name:
+                pc_label = f"{row.price_category} – {cat_name}"
+
+        comment = f"Zeiterfassung: {eff:.2f}h × {mult} = {total:.2f}h (Kategorie: {pc_label})"
+        doc.add_comment("Comment", text=comment)
 
 
 def auto_close_temp_closed_tickets():
