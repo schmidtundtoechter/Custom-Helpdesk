@@ -5,6 +5,7 @@ import os
 import re
 
 
+
 _REGISTER_SW_RE = re.compile(r'<script id="vite-plugin-pwa:register-sw"[^>]*></script>')
 _PORTAL_SCRIPT = '<script src="/assets/custom_helpdesk/js/helpdesk_portal.js"></script>'
 
