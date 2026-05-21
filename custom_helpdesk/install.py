@@ -2,46 +2,62 @@
 Custom Helpdesk install/migrate hooks.
 """
 import os
+import re
 
-SCRIPT_TAG = '<script src="/assets/custom_helpdesk/js/helpdesk_portal.js"></script>'
-INJECT_BEFORE = '</body>'
+_REGISTER_SW_RE = re.compile(r'<script id="vite-plugin-pwa:register-sw"[^>]*></script>')
+_PORTAL_SCRIPT = '<script src="/assets/custom_helpdesk/js/helpdesk_portal.js"></script>'
+
+_JINJA_BOOT = (
+    '  <script>\n'
+    '    window.site_name = "{{ site_name }}";\n'
+    '  </script>\n\n'
+    '  <script>\n'
+    '    {% for key in boot %}\n'
+    '    window["{{ key }}"] = {{ boot[key] | tojson }};\n'
+    '    {% endfor %}\n'
+    '  </script>\n'
+)
 
 
 def patch_helpdesk_index():
     """
-    Inject custom_helpdesk portal JS into the Helpdesk's www/helpdesk/index.html.
+    Rebuild www/helpdesk/index.html from the current Vite output so asset
+    hashes are always fresh, the PWA service worker is removed, and the
+    custom portal JS is injected.
 
-    Called automatically after every `bench migrate` via the after_migrate hook.
-    Also run manually after `bench build --app helpdesk` (that command can update
-    the asset hash in index.html, which leaves our tag intact but is worth checking).
-
-    Idempotent — does nothing if the tag is already present.
+    Called after every `bench migrate` via after_migrate hook.
+    Always overwrites — safe to run multiple times.
     """
     bench_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), '..', '..', '..')
     )
-    index_path = os.path.join(
+
+    vite_path = os.path.join(
+        bench_path, 'apps', 'helpdesk', 'helpdesk', 'public', 'desk', 'index.html'
+    )
+    www_path = os.path.join(
         bench_path, 'apps', 'helpdesk', 'helpdesk', 'www', 'helpdesk', 'index.html'
     )
 
-    if not os.path.exists(index_path):
-        print(f'[custom_helpdesk] WARNING: Helpdesk index.html not found at {index_path}')
+    if not os.path.exists(vite_path):
+        print(f'[custom_helpdesk] WARNING: Vite index not found at {vite_path}')
         return
 
-    with open(index_path, 'r', encoding='utf-8') as f:
+    with open(vite_path, encoding='utf-8') as f:
         content = f.read()
 
-    if SCRIPT_TAG in content:
-        print('[custom_helpdesk] Helpdesk index.html already patched — skipping.')
+    # Strip PWA service worker — it scopes to / and breaks ERPNext
+    content = _REGISTER_SW_RE.sub('', content)
+
+    if '</body>' not in content:
+        print('[custom_helpdesk] WARNING: </body> tag not found — aborting patch.')
         return
 
-    if INJECT_BEFORE not in content:
-        print('[custom_helpdesk] WARNING: </body> not found in Helpdesk index.html — cannot patch.')
-        return
+    # Inject Jinja boot variables + portal script before </body>
+    injection = f'{_JINJA_BOOT}  {_PORTAL_SCRIPT}\n</body>'
+    content = content.replace('</body>', injection, 1)
 
-    content = content.replace(INJECT_BEFORE, f'  {SCRIPT_TAG}\n  {INJECT_BEFORE}', 1)
-
-    with open(index_path, 'w', encoding='utf-8') as f:
+    with open(www_path, 'w', encoding='utf-8') as f:
         f.write(content)
 
-    print('[custom_helpdesk] Patched Helpdesk index.html with portal JS script tag.')
+    print('[custom_helpdesk] www/helpdesk/index.html rebuilt from Vite output.')
