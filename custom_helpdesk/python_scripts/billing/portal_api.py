@@ -74,7 +74,7 @@ def update_time_log(ticket_name, row_name, data):
     """
     frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
 
-    allowed = {"multiplier", "price_category", "manual_override", "staff_member", "ruecksprache_erforderlich"}
+    allowed = {"multiplier", "price_category", "manual_override", "staff_member", "ruecksprache_erforderlich", "description"}
     updates = {k: v for k, v in json.loads(data).items() if k in allowed}
     if not updates:
         return
@@ -96,3 +96,25 @@ def update_time_log(ticket_name, row_name, data):
         ["effective_duration", "multiplier", "total_cost", "price_category"],
         as_dict=True,
     )
+
+
+@frappe.whitelist()
+def get_ticket_details(ticket_name):
+    """Return project, support_category, and customer for a ticket."""
+    frappe.has_permission("HD Ticket", "read", ticket_name, throw=True)
+    return frappe.db.get_value(
+        "HD Ticket", ticket_name,
+        ["project", "support_category", "customer"],
+        as_dict=True,
+    )
+
+
+@frappe.whitelist()
+def update_ticket_details(ticket_name, data):
+    """Update project and/or support_category on an HD Ticket."""
+    frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+    updates = {k: v for k, v in json.loads(data).items() if k in {"project", "support_category"}}
+    if not updates:
+        return
+    frappe.db.set_value("HD Ticket", ticket_name, updates)
+    frappe.db.commit()

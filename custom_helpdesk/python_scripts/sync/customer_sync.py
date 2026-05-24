@@ -93,3 +93,19 @@ def _sync(customer_doc):
 
     if changed:
         hd.save(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def sync_all_customers():
+    """Bulk sync all ERPNext customers to Helpdesk. Run once after setup."""
+    customers = frappe.get_all("Customer", fields=["name"])
+    results = {"synced": 0, "errors": []}
+    for c in customers:
+        try:
+            doc = frappe.get_doc("Customer", c.name)
+            sync_to_hd_customer(doc)
+            results["synced"] += 1
+        except Exception as e:
+            results["errors"].append(f"{c.name}: {str(e)}")
+    frappe.db.commit()
+    return results

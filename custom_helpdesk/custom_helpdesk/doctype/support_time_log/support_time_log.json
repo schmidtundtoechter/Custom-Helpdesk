@@ -11,6 +11,7 @@
   "duration",
   "manual_override",
   "effective_duration",
+  "description",
   "col_break_1",
   "staff_member",
   "entered_by",
@@ -61,6 +62,12 @@
    "precision": "2",
    "read_only": 1,
    "description": "Manual Override if set, otherwise Duration"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Beschreibung",
+   "description": "What did the agent do? Used as Timesheet line description."
   },
   {
    "fieldname": "col_break_1",

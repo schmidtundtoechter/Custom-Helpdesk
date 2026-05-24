@@ -6,7 +6,11 @@
  *
  * Features:
  *  - Agent ticket view (/helpdesk/tickets/:id):
- *      Zeiterfassung panel: timer start/stop, multiplier, price category, Buchen, history
+ *      Ticket Info panel: project + support category fields (F6)
+ *      Zeiterfassung panel: timer start/stop, live counter (F8), multiplier,
+ *        manual override (F2), description (F5), price category,
+ *        selective Buchen (F9), Rücksprache, history
+ *      MutationObserver to survive Vue tab switches (F4)
  *  - Customer ticket view (/helpdesk/my-tickets/:id):
  *      Closed ticket banner + disabled reply area
  */
@@ -84,6 +88,14 @@
   // ── Panel DOM helpers ───────────────────────────────────────────────────────
 
   var PANEL_ID = 'ch-zeiterfassung-panel';
+  var TICKET_INFO_ID = 'ch-ticket-info-panel';
+
+  // F4 — globals for MutationObserver panel re-injection
+  var _mutationObserver = null;
+  var _reinjecting = false;
+
+  // F8 — global for live timer interval
+  var _timerInterval = null;
 
   function el(tag, styles, attrs) {
     var node = document.createElement(tag);
@@ -109,11 +121,96 @@
     return dt ? String(dt).slice(0, 16).replace('T', ' ') : '–';
   }
 
+  // ── F4 — MutationObserver: re-inject panel when Vue removes it ──────────────
+
+  function watchForPanelRemoval(ticketId) {
+    if (_mutationObserver) _mutationObserver.disconnect();
+    _mutationObserver = new MutationObserver(function () {
+      if (_reinjecting) return;
+      if (!document.getElementById(PANEL_ID)) {
+        _reinjecting = true;
+        setTimeout(function () {
+          renderPanel(ticketId).then(function () { _reinjecting = false; });
+        }, 400);
+      }
+    });
+    _mutationObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
   // ── Agent Zeiterfassung panel ───────────────────────────────────────────────
 
   function removePanel() {
+    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+    if (_mutationObserver) { _mutationObserver.disconnect(); _mutationObserver = null; }
     var p = document.getElementById(PANEL_ID);
     if (p) p.remove();
+    var info = document.getElementById(TICKET_INFO_ID);
+    if (info) info.remove();
+  }
+
+  // ── F6 — Ticket Info panel (Project + Support Category) ────────────────────
+
+  function renderTicketInfoPanel(ticketId) {
+    return apiMethod(
+      'custom_helpdesk.python_scripts.billing.portal_api.get_ticket_details',
+      { ticket_name: ticketId }
+    ).then(function (res) {
+      var details = res.message || {};
+
+      var infoPanel = el('div',
+        'margin:8px 20px 0;padding:10px 16px;border:1px solid #d1d5db;border-radius:8px;' +
+        'background:#f9fafb;font-size:13px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;'
+      );
+      infoPanel.id = TICKET_INFO_ID;
+
+      var lbl = el('strong', 'white-space:nowrap;');
+      lbl.textContent = 'Ticket Details:';
+      infoPanel.appendChild(lbl);
+
+      // Project field
+      var projWrap = el('span', 'display:flex;align-items:center;gap:6px;');
+      var projLbl = el('span', 'color:#6b7280;');
+      projLbl.textContent = 'Projekt:';
+      var projInput = el('input',
+        'border:1px solid #d1d5db;border-radius:3px;padding:3px 6px;font-size:13px;min-width:140px;'
+      );
+      projInput.value = details.project || '';
+      projInput.placeholder = 'Projekt-ID';
+      projInput.title = 'Link → Project (ERPNext)';
+      projInput.addEventListener('change', function () {
+        apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_ticket_details', {
+          ticket_name: ticketId,
+          data: JSON.stringify({ project: projInput.value }),
+        });
+      });
+      projWrap.appendChild(projLbl);
+      projWrap.appendChild(projInput);
+      infoPanel.appendChild(projWrap);
+
+      // Support Category field
+      var scWrap = el('span', 'display:flex;align-items:center;gap:6px;');
+      var scLbl = el('span', 'color:#6b7280;');
+      scLbl.textContent = 'Support-Kategorie:';
+      var scInput = el('input',
+        'border:1px solid #d1d5db;border-radius:3px;padding:3px 6px;font-size:13px;min-width:140px;'
+      );
+      scInput.value = details.support_category || '';
+      scInput.placeholder = 'Kategorie-ID';
+      scInput.title = 'Link → Support Category (ERPNext)';
+      scInput.addEventListener('change', function () {
+        apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_ticket_details', {
+          ticket_name: ticketId,
+          data: JSON.stringify({ support_category: scInput.value }),
+        });
+      });
+      scWrap.appendChild(scLbl);
+      scWrap.appendChild(scInput);
+      infoPanel.appendChild(scWrap);
+
+      _insertPanel(infoPanel);
+    }).catch(function (err) {
+      console.error('[custom_helpdesk] Ticket info panel error:', err);
+    });
   }
 
   function renderPanel(ticketId) {
@@ -137,7 +234,8 @@
       for (var i = logs.length - 1; i >= 0; i--) {
         if (logs[i].start_time && !logs[i].end_time) { activeRow = logs[i]; break; }
       }
-      var hasBookable = logs.some(function (r) { return !r.gesperrt && !r.is_invoiced; });
+      // F9 — bookable = not locked, not invoiced, not already submitted
+      var hasBookable = logs.some(function (r) { return !r.gesperrt && !r.is_invoiced && !r.timesheet_ref; });
 
       // Panel container
       var panel = el('div', 'margin:20px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-family:inherit;font-size:14px;');
@@ -158,8 +256,8 @@
       // Body
       var body = el('div', 'padding:12px 16px;');
 
-      // Timer buttons
-      var btnRow = el('div', 'display:flex;gap:8px;margin-bottom:12px;');
+      // Timer buttons row
+      var btnRow = el('div', 'display:flex;gap:8px;margin-bottom:12px;align-items:center;');
 
       var startBg = activeRow ? '#d1fae5' : '#10b981';
       var startFg = activeRow ? '#065f46' : '#fff';
@@ -195,6 +293,19 @@
 
       btnRow.appendChild(startBtn);
       btnRow.appendChild(stopBtn);
+
+      // F8 — Live elapsed time counter when timer is running
+      if (activeRow && activeRow.start_time) {
+        var startMs = new Date(activeRow.start_time.replace(' ', 'T')).getTime();
+        var timerDisplay = el('span', 'margin-left:8px;font-weight:bold;color:#10b981;font-size:14px;');
+        timerDisplay.id = 'ch-live-timer';
+        _timerInterval = setInterval(function () {
+          var elapsed = (Date.now() - startMs) / 3600000;
+          timerDisplay.textContent = elapsed.toFixed(4) + ' h';
+        }, 1000);
+        btnRow.appendChild(timerDisplay);
+      }
+
       body.appendChild(btnRow);
 
       // Time logs table
@@ -202,6 +313,7 @@
         var table = el('table', 'width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;');
         table.innerHTML =
           '<thead><tr style="border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:12px;">' +
+            '<th style="text-align:center;padding:4px 6px;width:24px;" title="Auswählen für Buchen"></th>' +
             '<th style="text-align:left;padding:4px 8px;">Start</th>' +
             '<th style="text-align:left;padding:4px 8px;">Ende</th>' +
             '<th style="text-align:right;padding:4px 8px;">Eff. (h)</th>' +
@@ -235,7 +347,9 @@
           }
 
           if (row.gesperrt || row.is_invoiced) {
+            // Locked / invoiced row — read-only display
             tr.innerHTML =
+              '<td style="text-align:center;padding:4px 6px;"></td>' +
               '<td style="padding:4px 8px;">' + fmtDT(row.start_time) + '</td>' +
               '<td style="padding:4px 8px;">' + (row.end_time ? fmtDT(row.end_time) : '...') + '</td>' +
               '<td style="text-align:right;padding:4px 8px;">' + eff.toFixed(2) + '</td>' +
@@ -245,7 +359,16 @@
               '<td style="padding:4px 8px;">' + (row.staff_member || '–') + '</td>' +
               '<td style="text-align:center;padding:4px 8px;color:' + (row.ruecksprache_erforderlich ? '#d97706' : 'inherit') + ';">' + (row.ruecksprache_erforderlich ? '✓' : '') + '</td>';
             tr.appendChild(statusCell);
+            tbody.appendChild(tr);
+            // F5 — show description below locked row if present
+            if (row.description) {
+              var descTrL = el('tr', 'background:#f9fafb;');
+              descTrL.innerHTML = '<td colspan="10" style="padding:2px 8px 6px 36px;color:#6b7280;font-size:12px;font-style:italic;">' +
+                _escHtml(row.description) + '</td>';
+              tbody.appendChild(descTrL);
+            }
           } else {
+            // Editable (unlocked) row
             var pcOptions = priceCats.map(function (p) {
               return '<option value="' + p.name + '"' + (p.name === row.price_category ? ' selected' : '') + '>' +
                 p.time_code + ' – ' + p.category_name + '</option>';
@@ -256,9 +379,20 @@
             }).join('');
 
             tr.innerHTML =
+              // F9 — select checkbox (checked by default)
+              '<td style="text-align:center;padding:4px 6px;">' +
+                '<input type="checkbox" class="ch-select-row" data-row="' + row.name + '" checked ' +
+                  'style="cursor:pointer;width:14px;height:14px;" title="Für Buchen auswählen">' +
+              '</td>' +
               '<td style="padding:4px 8px;">' + fmtDT(row.start_time) + '</td>' +
               '<td style="padding:4px 8px;">' + (row.end_time ? fmtDT(row.end_time) : '...') + '</td>' +
-              '<td style="text-align:right;padding:4px 8px;" class="ch-eff-' + row.name + '">' + eff.toFixed(2) + '</td>' +
+              // F2 — effective duration shown above, manual override input below
+              '<td style="text-align:right;padding:4px 8px;">' +
+                '<span class="ch-eff-' + row.name + '" style="display:block;font-size:12px;color:#374151;">' + eff.toFixed(2) + '</span>' +
+                '<input type="number" class="ch-manual" data-row="' + row.name + '" step="0.01" min="0" ' +
+                  'style="width:60px;border:1px solid #d1d5db;border-radius:3px;padding:2px;font-size:12px;" ' +
+                  'placeholder="Override" title="Manueller Override (h)" value="' + (row.manual_override || '') + '">' +
+              '</td>' +
               '<td style="text-align:center;padding:4px 8px;">' +
                 '<select class="ch-mult" data-row="' + row.name + '" style="width:50px;border:1px solid #d1d5db;border-radius:3px;padding:2px;">' + multOptions + '</select>' +
               '</td>' +
@@ -274,7 +408,7 @@
               '</td>';
             tr.appendChild(statusCell);
 
-            // Save on change
+            // Save on change for multiplier and price category
             tr.querySelectorAll('.ch-mult, .ch-pc').forEach(function (sel) {
               sel.addEventListener('change', function () {
                 var rowName = sel.dataset.row;
@@ -292,13 +426,26 @@
                     var totCell = table.querySelector('.ch-tot-' + rowName);
                     if (effCell) effCell.textContent = newEff.toFixed(2);
                     if (totCell) totCell.textContent = newTotal.toFixed(2);
-                    // Refresh header stats
                     renderPanel(ticketId);
                   }
                 });
               });
             });
 
+            // F2 — manual override handler
+            var manualInput = tr.querySelector('.ch-manual');
+            if (manualInput) {
+              manualInput.addEventListener('change', function () {
+                var val = parseFloat(manualInput.value);
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                  ticket_name: ticketId,
+                  row_name: manualInput.dataset.row,
+                  data: JSON.stringify({ manual_override: isNaN(val) ? 0 : val }),
+                }).then(function () { renderPanel(ticketId); });
+              });
+            }
+
+            // Rücksprache checkbox handler
             var rueckChk = tr.querySelector('.ch-rueck');
             if (rueckChk) {
               rueckChk.addEventListener('change', function () {
@@ -309,9 +456,30 @@
                 });
               });
             }
-          }
 
-          tbody.appendChild(tr);
+            tbody.appendChild(tr);
+
+            // F5 — description input sub-row for editable rows
+            var descTrE = el('tr', 'background:#fafafa;border-bottom:1px solid #f0f0f0;');
+            var descTd = el('td', 'padding:2px 8px 6px 36px;');
+            descTd.setAttribute('colspan', '10');
+            var descInput = document.createElement('input');
+            descInput.type = 'text';
+            descInput.style.cssText = 'width:100%;border:1px solid #e5e7eb;border-radius:3px;padding:3px 6px;font-size:12px;box-sizing:border-box;';
+            descInput.placeholder = 'Beschreibung (was wurde gemacht?)';
+            descInput.value = row.description || '';
+            descInput.dataset.row = row.name;
+            descInput.addEventListener('change', function () {
+              apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                ticket_name: ticketId,
+                row_name: descInput.dataset.row,
+                data: JSON.stringify({ description: descInput.value }),
+              });
+            });
+            descTd.appendChild(descInput);
+            descTrE.appendChild(descTd);
+            tbody.appendChild(descTrE);
+          }
         });
 
         body.appendChild(table);
@@ -321,17 +489,24 @@
         body.appendChild(empty);
       }
 
-      // Buchen button
+      // F9 — Buchen button submits only checked rows
       if (hasBookable) {
         var buchenBtn = btn(
           'Buchen → ERPNext Timesheet',
           'border:1px solid #3b82f6;background:#3b82f6;color:#fff;margin-top:4px;',
           function () {
-            if (!confirm('Alle offenen Zeiteinträge als ERPNext Timesheet buchen?')) return;
+            var checkboxes = panel.querySelectorAll('.ch-select-row:checked');
+            var selectedRows = Array.prototype.map.call(checkboxes, function (cb) { return cb.dataset.row; });
+            if (!selectedRows.length) {
+              alert('Keine Zeilen ausgewählt. Bitte mindestens eine Zeile ankreuzen.');
+              return;
+            }
+            if (!confirm('Ausgewählte Zeiteinträge (' + selectedRows.length + ') als ERPNext Timesheet buchen?')) return;
             buchenBtn.disabled = true;
             buchenBtn.textContent = 'Buche...';
             apiMethod('custom_helpdesk.python_scripts.billing.buchen.buchen', {
               ticket_name: ticketId,
+              row_names: JSON.stringify(selectedRows),
             }).then(function (res) {
               if (res.message) {
                 alert('Timesheet ' + res.message + ' wurde erstellt.');
@@ -389,12 +564,18 @@
         panel.appendChild(header);
         panel.appendChild(body);
 
-        // Insert after Vue content — wait for Vue's ticket view to render
         _insertPanel(panel);
+
+        // F4 — watch for Vue removing our panel (tab switches between Activity/Emails/Comments)
+        watchForPanelRemoval(ticketId);
       });
     }).catch(function (err) {
       console.error('[custom_helpdesk] Zeiterfassung panel error:', err);
     });
+  }
+
+  function _escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function _insertPanel(panel) {
@@ -473,7 +654,10 @@
 
     if (agentId) {
       // Delay to let Vue render the ticket page first
-      _routeTimer = setTimeout(function () { renderPanel(agentId); }, 1200);
+      _routeTimer = setTimeout(function () {
+        renderTicketInfoPanel(agentId);
+        renderPanel(agentId);
+      }, 1200);
     } else if (custId) {
       _routeTimer = setTimeout(function () { handleCustomerPortal(custId); }, 1000);
     }

@@ -11,19 +11,24 @@ from frappe.utils import now_datetime
 
 
 @frappe.whitelist()
-def buchen(ticket_name):
+def buchen(ticket_name, row_names=None):
     """
-    Create an ERPNext Timesheet from all unlocked, uninvoiced time log rows.
-    Called from the Buchen button on the HD Ticket form.
-
+    Create an ERPNext Timesheet from selected (or all) unlocked, uninvoiced time log rows.
+    row_names: optional JSON list of row names to book; if omitted all bookable rows are used.
     Returns the name of the created Timesheet.
     """
+    import json as _json
     frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+
+    selected = None
+    if row_names:
+        selected = set(_json.loads(row_names) if isinstance(row_names, str) else row_names)
 
     ticket = frappe.get_doc("HD Ticket", ticket_name)
     rows = [
         r for r in (ticket.get("support_time_logs") or [])
-        if not r.gesperrt and not r.is_invoiced
+        if not r.gesperrt and not r.is_invoiced and not r.timesheet_ref
+        and (selected is None or r.name in selected)
     ]
 
     if not rows:
@@ -93,8 +98,11 @@ def _create_timesheet(ticket, rows, customer_name):
             "is_billable": 1,
             "project": ticket.get("project") or "",
             "description": (
-                f"Ticket {ticket.name}"
-                + (f" | Rücksprache" if row.ruecksprache_erforderlich else "")
+                row.description
+                or (
+                    f"Ticket {ticket.name}"
+                    + (" | Rücksprache" if row.ruecksprache_erforderlich else "")
+                )
             ),
         })
 
@@ -115,7 +123,7 @@ def get_buchen_history(ticket_name):
         "Support Time Log",
         filters={"parent": ticket_name, "timesheet_ref": ["is", "set"]},
         fields=["timesheet_ref", "buchen_timestamp"],
-        order_by="buchen_timestamp asc",
+        order_by="buchen_timestamp desc",
     )
 
     # Deduplicate by timesheet

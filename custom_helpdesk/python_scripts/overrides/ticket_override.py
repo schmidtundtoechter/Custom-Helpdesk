@@ -19,8 +19,29 @@ AUTO_CLOSE_DAYS = 21
 
 def before_save(doc, method=None):
     _validate_status_transition(doc)
+    _calculate_durations(doc)
     _recompute_time_totals(doc)
     _add_multiplier_comments(doc)
+
+
+def _calculate_durations(doc):
+    from frappe.utils import time_diff_in_hours
+    for row in doc.get("support_time_logs") or []:
+        if row.start_time and row.end_time:
+            raw = time_diff_in_hours(row.end_time, row.start_time)
+            row.duration = round(raw, 4)
+
+        if row.manual_override:
+            row.effective_duration = round(float(row.manual_override), 4)
+        elif row.duration:
+            row.effective_duration = round(float(row.duration), 4)
+
+        if row.price_category and row.effective_duration:
+            pc_rate = frappe.db.get_value("Support Price Category", row.price_category, "price_per_hour") or 0
+            mult = int(row.multiplier or 1)
+            row.total_cost = round(float(row.effective_duration) * mult * float(pc_rate), 2)
+        else:
+            row.total_cost = 0
 
 
 def _validate_status_transition(doc):
