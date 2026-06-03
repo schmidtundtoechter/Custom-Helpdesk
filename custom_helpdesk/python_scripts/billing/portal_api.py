@@ -20,6 +20,36 @@ def get_time_logs(ticket_name):
     return [row.as_dict() for row in (ticket.support_time_logs or [])]
 
 
+def _employee_for_user(user):
+    """Return the Employee name linked to a Frappe user, or None."""
+    return frappe.db.get_value("Employee", {"user_id": user}, "name")
+
+
+@frappe.whitelist()
+def get_agents():
+    """
+    Return active HD Agents that have a matching ERPNext Employee record.
+    Used by the portal to populate the Mitarbeiter dropdown.
+    """
+    agents = frappe.get_all(
+        "HD Agent",
+        filters={"is_active": 1},
+        fields=["user", "agent_name"],
+    )
+    result = []
+    for agent in agents:
+        emp = _employee_for_user(agent.user)
+        if emp:
+            emp_name = frappe.db.get_value("Employee", emp, "employee_name") or emp
+            result.append({
+                "employee": emp,
+                "employee_name": emp_name,
+                "user": agent.user,
+                "agent_name": agent.agent_name or agent.user,
+            })
+    return result
+
+
 @frappe.whitelist()
 def start_timer(ticket_name):
     """
@@ -33,6 +63,7 @@ def start_timer(ticket_name):
         "start_time": now_datetime(),
         "entered_by": frappe.session.user,
         "multiplier": "1",
+        "staff_member": _employee_for_user(frappe.session.user),
     })
     ticket.flags.ignore_permissions = True
     ticket.save()
@@ -51,6 +82,8 @@ def stop_timer(ticket_name, row_name):
     for row in ticket.support_time_logs:
         if row.name == row_name:
             row.end_time = now_datetime()
+            if not row.staff_member:
+                row.staff_member = _employee_for_user(frappe.session.user)
             break
     else:
         frappe.throw(_("Zeiteintrag nicht gefunden: {0}").format(row_name))
@@ -74,14 +107,21 @@ def update_time_log(ticket_name, row_name, data):
     """
     frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
 
-    allowed = {"multiplier", "price_category", "manual_override", "staff_member", "ruecksprache_erforderlich", "description"}
+    allowed = {
+        "multiplier", "price_category", "manual_override", "staff_member",
+        "ruecksprache_erforderlich", "description", "start_time", "end_time",
+    }
     updates = {k: v for k, v in json.loads(data).items() if k in allowed}
     if not updates:
         return
 
+    time_fields = {"start_time", "end_time"}
+
     ticket = frappe.get_doc("HD Ticket", ticket_name)
     for row in ticket.support_time_logs:
         if row.name == row_name:
+            if (row.gesperrt or row.is_invoiced) and updates.keys() & time_fields:
+                frappe.throw(_("Start- und Endzeit können bei gesperrten oder abgerechneten Einträgen nicht geändert werden."))
             for field, value in updates.items():
                 setattr(row, field, value)
             break

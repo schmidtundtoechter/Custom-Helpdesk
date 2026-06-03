@@ -40,16 +40,21 @@ function _add_timer_buttons(frm) {
         row.entered_by = frappe.session.user;
         row.multiplier = "1";
         frm.refresh_field("support_time_logs");
-        frm.save();
-        frappe.show_alert({ message: __("Timer gestartet"), indicator: "green" });
+        frappe.db.get_value("Employee", { user_id: frappe.session.user }, "name", function (r) {
+            if (r && r.name) {
+                frappe.model.set_value(row.doctype, row.name, "staff_member", r.name);
+            }
+            frm.save();
+            frappe.show_alert({ message: __("Timer gestartet"), indicator: "green" });
+        });
     }, __("Timer"));
 
     frm.add_custom_button(__("Pause / Stop Timer"), function () {
         const logs = frm.doc.support_time_logs || [];
         // Find the last row without an end_time
-        const active = logs.slice().reverse().find(r => r.start_time && !r.end_time);
+        const active = logs.slice().reverse().find(r => r.start_time && !r.end_time && r.entered_by === frappe.session.user);
         if (!active) {
-            frappe.msgprint(__("Kein aktiver Timer gefunden."));
+            frappe.msgprint(__("Kein aktiver Timer für diesen Benutzer gefunden."));
             return;
         }
         frappe.model.set_value(active.doctype, active.name, "end_time", frappe.datetime.now_datetime());

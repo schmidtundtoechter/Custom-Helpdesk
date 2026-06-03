@@ -74,6 +74,18 @@
     });
   }
 
+  var _agentCache = null;
+
+  function getAgents() {
+    if (_agentCache) return Promise.resolve(_agentCache);
+    return apiMethod(
+      'custom_helpdesk.python_scripts.billing.portal_api.get_agents', {}
+    ).then(function (res) {
+      _agentCache = res.message || [];
+      return _agentCache;
+    });
+  }
+
   // ── Time log data ───────────────────────────────────────────────────────────
 
   function getTimeLogs(ticketName) {
@@ -214,9 +226,10 @@
   }
 
   function renderPanel(ticketId) {
-    return Promise.all([getTimeLogs(ticketId), getPriceCategories()]).then(function (results) {
+    return Promise.all([getTimeLogs(ticketId), getPriceCategories(), getAgents()]).then(function (results) {
       var logs = results[0];
       var priceCats = results[1];
+      var agents = results[2];
       var pcMap = {};
       priceCats.forEach(function (p) { pcMap[p.name] = p; });
 
@@ -230,10 +243,6 @@
         if (!r.is_invoiced) unbilledH += h;
       });
 
-      var activeRow = null;
-      for (var i = logs.length - 1; i >= 0; i--) {
-        if (logs[i].start_time && !logs[i].end_time) { activeRow = logs[i]; break; }
-      }
       // F9 — bookable = not locked, not invoiced, not already submitted
       var hasBookable = logs.some(function (r) { return !r.gesperrt && !r.is_invoiced && !r.timesheet_ref; });
 
@@ -259,11 +268,10 @@
       // Timer buttons row
       var btnRow = el('div', 'display:flex;gap:8px;margin-bottom:12px;align-items:center;');
 
-      var startBg = activeRow ? '#d1fae5' : '#10b981';
-      var startFg = activeRow ? '#065f46' : '#fff';
+      // Start button is always enabled — multiple agents can run timers simultaneously
       var startBtn = btn(
-        activeRow ? '⏱ Timer läuft...' : '▶ Start Timer',
-        'border:1px solid #10b981;background:' + startBg + ';color:' + startFg + ';',
+        '▶ Start Timer',
+        'border:1px solid #10b981;background:#10b981;color:#fff;',
         function () {
           startBtn.disabled = true;
           startBtn.textContent = 'Starte...';
@@ -272,40 +280,8 @@
           }).then(function () { renderPanel(ticketId); });
         }
       );
-      startBtn.disabled = !!activeRow;
-
-      var stopBg = activeRow ? '#ef4444' : '#f3f4f6';
-      var stopFg = activeRow ? '#fff' : '#9ca3af';
-      var stopBtn = btn(
-        '⏹ Stop Timer',
-        'border:1px solid #ef4444;background:' + stopBg + ';color:' + stopFg + ';',
-        function () {
-          if (!activeRow) return;
-          stopBtn.disabled = true;
-          stopBtn.textContent = 'Stoppe...';
-          apiMethod('custom_helpdesk.python_scripts.billing.portal_api.stop_timer', {
-            ticket_name: ticketId,
-            row_name: activeRow.name,
-          }).then(function () { renderPanel(ticketId); });
-        }
-      );
-      stopBtn.disabled = !activeRow;
 
       btnRow.appendChild(startBtn);
-      btnRow.appendChild(stopBtn);
-
-      // F8 — Live elapsed time counter when timer is running
-      if (activeRow && activeRow.start_time) {
-        var startMs = new Date(activeRow.start_time.replace(' ', 'T')).getTime();
-        var timerDisplay = el('span', 'margin-left:8px;font-weight:bold;color:#10b981;font-size:14px;');
-        timerDisplay.id = 'ch-live-timer';
-        _timerInterval = setInterval(function () {
-          var elapsed = (Date.now() - startMs) / 3600000;
-          timerDisplay.textContent = elapsed.toFixed(4) + ' h';
-        }, 1000);
-        btnRow.appendChild(timerDisplay);
-      }
-
       body.appendChild(btnRow);
 
       // Time logs table
@@ -378,14 +354,40 @@
               return '<option value="' + v + '"' + (v === mult ? ' selected' : '') + '>' + v + '</option>';
             }).join('');
 
+            var staffSelect =
+              '<select class="ch-staff" data-row="' + row.name + '" ' +
+              'style="border:1px solid #d1d5db;border-radius:3px;padding:2px;max-width:160px;">' +
+              '<option value="">– wählen –</option>' +
+              agents.map(function (a) {
+                return '<option value="' + a.employee + '"' +
+                  (a.employee === row.staff_member ? ' selected' : '') + '>' +
+                  _escHtml(a.employee_name || a.employee) + '</option>';
+              }).join('') +
+              '</select>';
+
             tr.innerHTML =
               // F9 — select checkbox (checked by default)
               '<td style="text-align:center;padding:4px 6px;">' +
                 '<input type="checkbox" class="ch-select-row" data-row="' + row.name + '" checked ' +
                   'style="cursor:pointer;width:14px;height:14px;" title="Für Buchen auswählen">' +
               '</td>' +
-              '<td style="padding:4px 8px;">' + fmtDT(row.start_time) + '</td>' +
-              '<td style="padding:4px 8px;">' + (row.end_time ? fmtDT(row.end_time) : '...') + '</td>' +
+              '<td style="padding:4px 8px;">' +
+                '<input type="datetime-local" class="ch-start-time" data-row="' + row.name + '"' +
+                ' value="' + (row.start_time || '').replace(' ', 'T').slice(0, 16) + '"' +
+                ' style="border:1px solid #d1d5db;border-radius:3px;padding:2px;font-size:12px;width:160px;">' +
+              '</td>' +
+              '<td style="padding:4px 8px;">' + (row.end_time ?
+                '<input type="datetime-local" class="ch-end-time" data-row="' + row.name + '"' +
+                ' value="' + (row.end_time || '').replace(' ', 'T').slice(0, 16) + '"' +
+                ' style="border:1px solid #d1d5db;border-radius:3px;padding:2px;font-size:12px;width:160px;">'
+                :
+                '<span class="ch-live-elapsed" data-start-ms="' +
+                  new Date((row.start_time || '').replace(' ', 'T')).getTime() +
+                  '" style="font-weight:bold;color:#10b981;font-size:12px;">...</span>' +
+                ' <button class="ch-stop-row" data-row="' + row.name +
+                  '" style="padding:2px 6px;font-size:11px;background:#ef4444;color:#fff;' +
+                  'border:none;border-radius:3px;cursor:pointer;margin-left:4px;">⏹ Stop</button>'
+              ) + '</td>' +
               // F2 — effective duration shown above, manual override input below
               '<td style="text-align:right;padding:4px 8px;">' +
                 '<span class="ch-eff-' + row.name + '" style="display:block;font-size:12px;color:#374151;">' + eff.toFixed(2) + '</span>' +
@@ -402,11 +404,61 @@
                 '</select>' +
               '</td>' +
               '<td style="text-align:right;padding:4px 8px;" class="ch-tot-' + row.name + '">' + total.toFixed(2) + '</td>' +
-              '<td style="padding:4px 8px;">' + (row.staff_member || '–') + '</td>' +
+              '<td style="padding:4px 8px;">' + staffSelect + '</td>' +
               '<td style="text-align:center;padding:4px 8px;">' +
                 '<input type="checkbox" class="ch-rueck" data-row="' + row.name + '"' + (row.ruecksprache_erforderlich ? ' checked' : '') + ' style="cursor:pointer;width:16px;height:16px;">' +
               '</td>';
             tr.appendChild(statusCell);
+
+            // F8 — per-row Stop button for running rows
+            var stopRowBtn = tr.querySelector('.ch-stop-row');
+            if (stopRowBtn) {
+              stopRowBtn.addEventListener('click', function () {
+                stopRowBtn.disabled = true;
+                stopRowBtn.textContent = '...';
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.stop_timer', {
+                  ticket_name: ticketId,
+                  row_name: stopRowBtn.dataset.row,
+                }).then(function () { renderPanel(ticketId); });
+              });
+            }
+
+            // Editable start / end time inputs
+            var startInput = tr.querySelector('.ch-start-time');
+            if (startInput) {
+              startInput.addEventListener('change', function () {
+                var val = startInput.value ? startInput.value + ':00' : '';
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                  ticket_name: ticketId,
+                  row_name: startInput.dataset.row,
+                  data: JSON.stringify({ start_time: val.replace('T', ' ') }),
+                }).then(function () { renderPanel(ticketId); });
+              });
+            }
+
+            var endInput = tr.querySelector('.ch-end-time');
+            if (endInput) {
+              endInput.addEventListener('change', function () {
+                var val = endInput.value ? endInput.value + ':00' : '';
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                  ticket_name: ticketId,
+                  row_name: endInput.dataset.row,
+                  data: JSON.stringify({ end_time: val.replace('T', ' ') }),
+                }).then(function () { renderPanel(ticketId); });
+              });
+            }
+
+            // Staff member dropdown
+            var staffSel = tr.querySelector('.ch-staff');
+            if (staffSel) {
+              staffSel.addEventListener('change', function () {
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                  ticket_name: ticketId,
+                  row_name: staffSel.dataset.row,
+                  data: JSON.stringify({ staff_member: staffSel.value }),
+                });
+              });
+            }
 
             // Save on change for multiplier and price category
             tr.querySelectorAll('.ch-mult, .ch-pc').forEach(function (sel) {
@@ -568,6 +620,21 @@
 
         // F4 — watch for Vue removing our panel (tab switches between Activity/Emails/Comments)
         watchForPanelRemoval(ticketId);
+
+        // F8 — single interval updates live counters for all running rows in the panel
+        var hasRunning = logs.some(function (r) { return r.start_time && !r.end_time; });
+        if (hasRunning) {
+          _timerInterval = setInterval(function () {
+            var p = document.getElementById(PANEL_ID);
+            if (!p) { clearInterval(_timerInterval); _timerInterval = null; return; }
+            p.querySelectorAll('.ch-live-elapsed').forEach(function (span) {
+              var startMs = parseInt(span.dataset.startMs, 10);
+              if (startMs) {
+                span.textContent = ((Date.now() - startMs) / 3600000).toFixed(4) + ' h';
+              }
+            });
+          }, 1000);
+        }
       });
     }).catch(function (err) {
       console.error('[custom_helpdesk] Zeiterfassung panel error:', err);

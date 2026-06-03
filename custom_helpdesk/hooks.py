@@ -167,6 +167,11 @@ doc_events = {
     "Communication": {
         "before_insert": "custom_helpdesk.python_scripts.overrides.email_handler.before_communication_insert",
     },
+    # Sales Invoice: mark imported timesheets as invoiced on submit / reverse on cancel
+    "Sales Invoice": {
+        "on_submit": "custom_helpdesk.python_scripts.billing.support_invoice.on_sales_invoice_submit",
+        "on_cancel": "custom_helpdesk.python_scripts.billing.support_invoice.on_sales_invoice_cancel",
+    },
 }
 
 # Fixtures — custom fields applied on migrate
@@ -187,6 +192,10 @@ fixtures = [
                 "HD Ticket-support_time_logs",
                 "HD Ticket-total_support_time",
                 "HD Ticket-unbezahlte_supportzeit",
+                "Timesheet-custom_support_invoiced",
+                "Sales Invoice-custom_support_timesheet_refs",
+                "Customer-dienstleistungsrabatt",
+                "Sales Invoice Timesheet-custom_rabatt",
             ]],
         ],
     },
@@ -208,6 +217,14 @@ fixtures = [
             ["name", "in", [
                 "Helpdesk Closed Ticket Auto-Reply DE",
                 "Helpdesk Closed Ticket Auto-Reply EN",
+            ]],
+        ],
+    },
+    {
+        "doctype": "Client Script",
+        "filters": [
+            ["name", "in", [
+                "Ausgangsrechnung - Timesheets ggf. zu Projekten importieren und Supportk. anrechnen",
             ]],
         ],
     },

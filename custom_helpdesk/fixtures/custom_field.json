@@ -146,5 +146,54 @@
     "description": "Total uninvoiced support hours on this ticket",
     "print_hide": 1,
     "name": "HD Ticket-unbezahlte_supportzeit"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Timesheet",
+    "fieldname": "custom_support_invoiced",
+    "fieldtype": "Check",
+    "label": "Support Invoiced",
+    "description": "Set by custom_helpdesk when this Timesheet has been imported into a submitted Sales Invoice.",
+    "default": "0",
+    "insert_after": "note",
+    "hidden": 1,
+    "print_hide": 1,
+    "name": "Timesheet-custom_support_invoiced"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Sales Invoice",
+    "fieldname": "custom_support_timesheet_refs",
+    "fieldtype": "Small Text",
+    "label": "Support Timesheet References",
+    "description": "JSON list of Timesheet names imported via Support abrechnen. Used to mark timesheets as invoiced on submit.",
+    "insert_after": "amended_from",
+    "hidden": 1,
+    "print_hide": 1,
+    "name": "Sales Invoice-custom_support_timesheet_refs"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Customer",
+    "fieldname": "dienstleistungsrabatt",
+    "fieldtype": "Int",
+    "label": "Dienstleistungsrabatt",
+    "description": "in %",
+    "insert_after": "dienstleistungskontingent",
+    "in_list_view": 0,
+    "print_hide": 0,
+    "name": "Customer-dienstleistungsrabatt"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Sales Invoice Timesheet",
+    "fieldname": "custom_rabatt",
+    "fieldtype": "Int",
+    "label": "Rabatt",
+    "description": "in %",
+    "insert_after": "billing_amount",
+    "in_list_view": 0,
+    "print_hide": 0,
+    "name": "Sales Invoice Timesheet-custom_rabatt"
   }
 ]
