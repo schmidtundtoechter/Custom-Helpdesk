@@ -65,6 +65,18 @@ def _get_erpnext_customer(ticket):
     return None
 
 
+def _build_description(ticket_name, row):
+    parts = [f"Ticket {ticket_name}"]
+    if row.ruecksprache_erforderlich:
+        parts.append("⚠️ Rücksprache")
+    mult = int(row.multiplier or 1)
+    if mult > 1:
+        parts.append(f"{mult} Agenten")
+    if row.description:
+        parts.append(row.description)
+    return " | ".join(parts)
+
+
 def _create_timesheet(ticket, rows, customer_name):
     ts = frappe.new_doc("Timesheet")
     ts.customer = customer_name
@@ -101,13 +113,7 @@ def _create_timesheet(ticket, rows, customer_name):
             "billing_amount": billed_hours * price_per_hour,
             "is_billable": 1,
             "project": ticket.get("project") or "",
-            "description": (
-                row.description
-                or (
-                    f"Ticket {ticket.name}"
-                    + (" | Rücksprache" if row.ruecksprache_erforderlich else "")
-                )
-            ),
+            "description": _build_description(ticket.name, row),
         })
 
     for item_row in (ticket.get("support_items") or []):
