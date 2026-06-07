@@ -22,28 +22,28 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
         ["docstatus", "=", 1],
         ["custom_support_invoiced", "=", 0],
     ]
-    if project:
-        ts_filters.append(["project", "=", project])
-    else:
-        # Standard support: only timesheets with no project assigned
-        ts_filters.append(["project", "in", ["", None]])
 
     timesheets = frappe.get_all(
         "Timesheet",
         filters=ts_filters,
-        fields=["name", "project"],
+        fields=["name"],
         order_by="start_date asc",
     )
 
     if not timesheets:
         return {"rows": []}
 
-    ts_project_map = {ts.name: (ts.project or "") for ts in timesheets}
-    ts_names = list(ts_project_map.keys())
+    ts_names = [ts.name for ts in timesheets]
+
+    detail_filters = {"parent": ["in", ts_names], "is_billable": 1}
+    if project:
+        detail_filters["project"] = project
+    else:
+        detail_filters["project"] = ["in", ["", None]]
 
     details = frappe.get_all(
         "Timesheet Detail",
-        filters={"parent": ["in", ts_names], "is_billable": 1},
+        filters=detail_filters,
         fields=[
             "name", "parent", "from_time",
             "billing_hours", "hours", "billing_rate", "billing_amount",
@@ -77,7 +77,7 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
             "timesheet": d.parent,
             "timesheet_detail": d.name,
             "date": str(detail_date or ""),
-            "project": d.project or ts_project_map.get(d.parent, ""),
+            "project": d.project or "",
             "category_name": act_type_cache[act_type],
             "hours": flt(d.billing_hours or d.hours, 4),
             "rate": flt(d.billing_rate, 2),
@@ -158,10 +158,20 @@ def import_support_invoice_candidates(
                 "amount": -flt(applied, 2),
             })
 
+    article_items = []
+    for ts_name in timesheet_names:
+        ts_items = frappe.get_all(
+            "Timesheet Support Item",
+            filters={"parent": ts_name, "already_imported": 0},
+            fields=["item_code", "item_name", "qty", "uom"],
+        )
+        article_items.extend(ts_items)
+
     return {
         "customer": customer,
         "project": project or "",
         "items": items,
+        "article_items": article_items,
         "timesheet_names": list(timesheet_names),
     }
 
@@ -203,5 +213,16 @@ def _update_invoiced_state(doc, invoiced):
             frappe.db.set_value(
                 "Support Time Log", row_name,
                 "is_invoiced", flag,
+                update_modified=False,
+            )
+        tsi_rows = frappe.get_all(
+            "Timesheet Support Item",
+            filters={"parent": ts_name},
+            pluck="name",
+        )
+        for row_name in tsi_rows:
+            frappe.db.set_value(
+                "Timesheet Support Item", row_name,
+                "already_imported", flag,
                 update_modified=False,
             )

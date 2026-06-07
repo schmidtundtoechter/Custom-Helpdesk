@@ -25,29 +25,30 @@ def _employee_for_user(user):
     return frappe.db.get_value("Employee", {"user_id": user}, "name")
 
 
+def _agent_for_user(user):
+    """Return the HD Agent name linked to a Frappe user, or None."""
+    return frappe.db.get_value("HD Agent", {"user": user}, "name")
+
+
 @frappe.whitelist()
 def get_agents():
     """
-    Return active HD Agents that have a matching ERPNext Employee record.
+    Return active HD Agents.
     Used by the portal to populate the Mitarbeiter dropdown.
     """
     agents = frappe.get_all(
         "HD Agent",
         filters={"is_active": 1},
-        fields=["user", "agent_name"],
+        fields=["name", "user", "agent_name"],
     )
-    result = []
-    for agent in agents:
-        emp = _employee_for_user(agent.user)
-        if emp:
-            emp_name = frappe.db.get_value("Employee", emp, "employee_name") or emp
-            result.append({
-                "employee": emp,
-                "employee_name": emp_name,
-                "user": agent.user,
-                "agent_name": agent.agent_name or agent.user,
-            })
-    return result
+    return [
+        {
+            "name": a.name,
+            "agent_name": a.agent_name or a.user,
+            "user": a.user,
+        }
+        for a in agents
+    ]
 
 
 @frappe.whitelist()
@@ -63,7 +64,7 @@ def start_timer(ticket_name):
         "start_time": now_datetime(),
         "entered_by": frappe.session.user,
         "multiplier": "1",
-        "staff_member": _employee_for_user(frappe.session.user),
+        "staff_member": _agent_for_user(frappe.session.user),
     })
     ticket.flags.ignore_permissions = True
     ticket.save()
@@ -83,7 +84,7 @@ def stop_timer(ticket_name, row_name):
         if row.name == row_name:
             row.end_time = now_datetime()
             if not row.staff_member:
-                row.staff_member = _employee_for_user(frappe.session.user)
+                row.staff_member = _agent_for_user(frappe.session.user)
             break
     else:
         frappe.throw(_("Zeiteintrag nicht gefunden: {0}").format(row_name))
@@ -158,3 +159,91 @@ def update_ticket_details(ticket_name, data):
         return
     frappe.db.set_value("HD Ticket", ticket_name, updates)
     frappe.db.commit()
+
+
+@frappe.whitelist()
+def get_ticket_items(ticket_name):
+    """Return all HD Ticket Support Item rows for a ticket."""
+    frappe.has_permission("HD Ticket", "read", ticket_name, throw=True)
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    return [row.as_dict() for row in (ticket.support_items or [])]
+
+
+@frappe.whitelist()
+def add_ticket_item(ticket_name, data):
+    """Append a new item row to the ticket's support_items table."""
+    frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+    d = json.loads(data) if isinstance(data, str) else data
+    if not d.get("item_code"):
+        frappe.throw(_("Artikel ist erforderlich."))
+    d.setdefault("item_name", frappe.db.get_value("Item", d["item_code"], "item_name") or d["item_code"])
+    d.setdefault("uom", frappe.db.get_value("Item", d["item_code"], "stock_uom") or "")
+    d.setdefault("qty", 1)
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    row = ticket.append("support_items", {k: d[k] for k in ("item_code", "item_name", "qty", "uom") if k in d})
+    ticket.flags.ignore_permissions = True
+    ticket.save()
+    return row.as_dict()
+
+
+@frappe.whitelist()
+def update_ticket_item(ticket_name, row_name, data):
+    """Update qty and/or uom on a non-submitted Support Item row."""
+    frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+    updates = {k: v for k, v in (json.loads(data) if isinstance(data, str) else data).items() if k in {"qty", "uom"}}
+    if not updates:
+        return
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    for row in ticket.support_items:
+        if row.name == row_name:
+            if row.is_submitted:
+                frappe.throw(_("Übertragene Artikel können nicht bearbeitet werden."))
+            for f, v in updates.items():
+                setattr(row, f, v)
+            break
+    else:
+        frappe.throw(_("Artikel nicht gefunden: {0}").format(row_name))
+    ticket.flags.ignore_permissions = True
+    ticket.save()
+
+
+@frappe.whitelist()
+def delete_ticket_item(ticket_name, row_name):
+    """Remove a non-submitted Support Item row from the ticket."""
+    frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    for i, row in enumerate(ticket.support_items or []):
+        if row.name == row_name:
+            if row.is_submitted:
+                frappe.throw(_("Übertragene Artikel können nicht gelöscht werden."))
+            ticket.support_items.pop(i)
+            break
+    else:
+        frappe.throw(_("Artikel nicht gefunden: {0}").format(row_name))
+    ticket.flags.ignore_permissions = True
+    ticket.save()
+
+
+@frappe.whitelist()
+def get_closed_statuses():
+    """Return label_agent list of HD Ticket Status records with category='Closed'."""
+    return frappe.get_all(
+        "HD Ticket Status",
+        filters={"category": "Closed", "enabled": 1},
+        pluck="label_agent",
+    )
+
+
+@frappe.whitelist()
+def save_closing_details(ticket_name, data):
+    """Save closing dialog fields to an HD Ticket."""
+    frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+    allowed = {
+        "zeiteintraege_vollstaendig", "kunde_benachrichtigt",
+        "klassifizierung", "schliessungsstatus",
+        "schliessungs_kommentar", "schliessungs_kommentar_intern",
+    }
+    updates = {k: v for k, v in (json.loads(data) if isinstance(data, str) else data).items() if k in allowed}
+    if updates:
+        frappe.db.set_value("HD Ticket", ticket_name, updates)
+        frappe.db.commit()

@@ -195,5 +195,101 @@
     "in_list_view": 0,
     "print_hide": 0,
     "name": "Sales Invoice Timesheet-custom_rabatt"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "support_items_section",
+    "fieldtype": "Section Break",
+    "label": "Verwendete Artikel",
+    "insert_after": "unbezahlte_supportzeit",
+    "name": "HD Ticket-support_items_section"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "support_items",
+    "fieldtype": "Table",
+    "label": "Verwendete Artikel",
+    "options": "HD Ticket Support Item",
+    "insert_after": "support_items_section",
+    "name": "HD Ticket-support_items"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Timesheet",
+    "fieldname": "support_items",
+    "fieldtype": "Table",
+    "label": "Support Items",
+    "options": "Timesheet Support Item",
+    "insert_after": "custom_support_invoiced",
+    "name": "Timesheet-support_items"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "abschluss_section",
+    "fieldtype": "Section Break",
+    "label": "Abschluss",
+    "insert_after": "support_items",
+    "name": "HD Ticket-abschluss_section"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "zeiteintraege_vollstaendig",
+    "fieldtype": "Check",
+    "label": "Zeiteinträge vollständig erfasst",
+    "default": "0",
+    "insert_after": "abschluss_section",
+    "name": "HD Ticket-zeiteintraege_vollstaendig"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "kunde_benachrichtigt",
+    "fieldtype": "Check",
+    "label": "Kunde wurde benachrichtigt",
+    "default": "0",
+    "insert_after": "zeiteintraege_vollstaendig",
+    "name": "HD Ticket-kunde_benachrichtigt"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "klassifizierung",
+    "fieldtype": "Link",
+    "options": "HD Klassifizierung",
+    "label": "Klassifizierung",
+    "insert_after": "kunde_benachrichtigt",
+    "name": "HD Ticket-klassifizierung"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "schliessungsstatus",
+    "fieldtype": "Select",
+    "label": "Schließungsstatus",
+    "options": "\nErfolglos\nErfolgreich\nKeine Aktion erforderlich\nZwischenlösung",
+    "insert_after": "klassifizierung",
+    "name": "HD Ticket-schliessungsstatus"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "schliessungs_kommentar",
+    "fieldtype": "Small Text",
+    "label": "Kommentar",
+    "insert_after": "schliessungsstatus",
+    "name": "HD Ticket-schliessungs_kommentar"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
+    "fieldname": "schliessungs_kommentar_intern",
+    "fieldtype": "Small Text",
+    "label": "Kommentar (intern)",
+    "insert_after": "schliessungs_kommentar",
+    "name": "HD Ticket-schliessungs_kommentar_intern"
   }
 ]

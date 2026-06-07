@@ -78,7 +78,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Staff Member",
-   "options": "Employee"
+   "options": "HD Agent"
   },
   {
    "fieldname": "entered_by",

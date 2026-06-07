@@ -44,6 +44,10 @@ def buchen(ticket_name, row_names=None):
         if not row.ruecksprache_erforderlich:
             row.set("gesperrt", 1)
 
+    for item_row in (ticket.get("support_items") or []):
+        if not item_row.is_submitted:
+            item_row.is_submitted = 1
+
     ticket.flags.ignore_permissions = True
     ticket.save()
 
@@ -105,6 +109,15 @@ def _create_timesheet(ticket, rows, customer_name):
                 )
             ),
         })
+
+    for item_row in (ticket.get("support_items") or []):
+        if not item_row.is_submitted:
+            ts.append("support_items", {
+                "item_code": item_row.item_code,
+                "item_name": item_row.item_name or "",
+                "qty": item_row.qty or 1,
+                "uom": item_row.uom or "",
+            })
 
     ts.flags.ignore_links = True
     ts.insert(ignore_permissions=True)

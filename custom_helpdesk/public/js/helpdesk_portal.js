@@ -61,6 +61,9 @@
   // ── Price category cache ────────────────────────────────────────────────────
 
   var _priceCatCache = null;
+  var _closedStatusNames = new Set();
+  var _klassifizierungOptions = [];
+  var _closingInterceptorInstalled = false;
 
   function getPriceCategories() {
     if (_priceCatCache) return Promise.resolve(_priceCatCache);
@@ -97,10 +100,33 @@
     ).then(function (res) { return res.message || []; });
   }
 
+  function getTicketItems(ticketName) {
+    return apiMethod(
+      'custom_helpdesk.python_scripts.billing.portal_api.get_ticket_items',
+      { ticket_name: ticketName }
+    ).then(function (res) { return res.message || []; });
+  }
+
+  function loadClosingData() {
+    apiMethod(
+      'custom_helpdesk.python_scripts.billing.portal_api.get_closed_statuses', {}
+    ).then(function (res) {
+      if (res.message) res.message.forEach(function (s) { _closedStatusNames.add(s); });
+    });
+    apiGet('HD Klassifizierung', {
+      fields: JSON.stringify(['name']),
+      limit: 100,
+      order_by: 'name asc',
+    }).then(function (res) {
+      if (res.data) _klassifizierungOptions = res.data.map(function (x) { return x.name; });
+    });
+  }
+
   // ── Panel DOM helpers ───────────────────────────────────────────────────────
 
   var PANEL_ID = 'ch-zeiterfassung-panel';
   var TICKET_INFO_ID = 'ch-ticket-info-panel';
+  var ITEMS_PANEL_ID = 'ch-support-items-panel';
 
   // F4 — globals for MutationObserver panel re-injection
   var _mutationObserver = null;
@@ -142,11 +168,18 @@
       if (!document.getElementById(PANEL_ID)) {
         _reinjecting = true;
         setTimeout(function () {
-          renderPanel(ticketId).then(function () { _reinjecting = false; });
+          renderPanel(ticketId).then(function () {
+            _reinjecting = false;
+            renderItemsPanel(ticketId);
+          });
         }, 400);
       }
     });
     _mutationObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function renderBoth(ticketId) {
+    return renderPanel(ticketId).then(function () { renderItemsPanel(ticketId); });
   }
 
   // ── Agent Zeiterfassung panel ───────────────────────────────────────────────
@@ -158,6 +191,8 @@
     if (p) p.remove();
     var info = document.getElementById(TICKET_INFO_ID);
     if (info) info.remove();
+    var items = document.getElementById(ITEMS_PANEL_ID);
+    if (items) items.remove();
   }
 
   // ── F6 — Ticket Info panel (Project + Support Category) ────────────────────
@@ -277,7 +312,7 @@
           startBtn.textContent = 'Starte...';
           apiMethod('custom_helpdesk.python_scripts.billing.portal_api.start_timer', {
             ticket_name: ticketId,
-          }).then(function () { renderPanel(ticketId); });
+          }).then(function () { renderBoth(ticketId); });
         }
       );
 
@@ -359,9 +394,9 @@
               'style="border:1px solid #d1d5db;border-radius:3px;padding:2px;max-width:160px;">' +
               '<option value="">– wählen –</option>' +
               agents.map(function (a) {
-                return '<option value="' + a.employee + '"' +
-                  (a.employee === row.staff_member ? ' selected' : '') + '>' +
-                  _escHtml(a.employee_name || a.employee) + '</option>';
+                return '<option value="' + a.name + '"' +
+                  (a.name === row.staff_member ? ' selected' : '') + '>' +
+                  _escHtml(a.agent_name || a.name) + '</option>';
               }).join('') +
               '</select>';
 
@@ -419,7 +454,7 @@
                 apiMethod('custom_helpdesk.python_scripts.billing.portal_api.stop_timer', {
                   ticket_name: ticketId,
                   row_name: stopRowBtn.dataset.row,
-                }).then(function () { renderPanel(ticketId); });
+                }).then(function () { renderBoth(ticketId); });
               });
             }
 
@@ -432,7 +467,7 @@
                   ticket_name: ticketId,
                   row_name: startInput.dataset.row,
                   data: JSON.stringify({ start_time: val.replace('T', ' ') }),
-                }).then(function () { renderPanel(ticketId); });
+                }).then(function () { renderBoth(ticketId); });
               });
             }
 
@@ -444,7 +479,7 @@
                   ticket_name: ticketId,
                   row_name: endInput.dataset.row,
                   data: JSON.stringify({ end_time: val.replace('T', ' ') }),
-                }).then(function () { renderPanel(ticketId); });
+                }).then(function () { renderBoth(ticketId); });
               });
             }
 
@@ -478,7 +513,7 @@
                     var totCell = table.querySelector('.ch-tot-' + rowName);
                     if (effCell) effCell.textContent = newEff.toFixed(2);
                     if (totCell) totCell.textContent = newTotal.toFixed(2);
-                    renderPanel(ticketId);
+                    renderBoth(ticketId);
                   }
                 });
               });
@@ -493,7 +528,7 @@
                   ticket_name: ticketId,
                   row_name: manualInput.dataset.row,
                   data: JSON.stringify({ manual_override: isNaN(val) ? 0 : val }),
-                }).then(function () { renderPanel(ticketId); });
+                }).then(function () { renderBoth(ticketId); });
               });
             }
 
@@ -562,7 +597,7 @@
             }).then(function (res) {
               if (res.message) {
                 alert('Timesheet ' + res.message + ' wurde erstellt.');
-                renderPanel(ticketId);
+                renderBoth(ticketId);
               } else {
                 var err = (res.exception || res._server_messages || 'Unbekannter Fehler');
                 alert('Fehler: ' + err);
@@ -641,6 +676,213 @@
     });
   }
 
+  // ── Agent Verwendete Artikel panel ─────────────────────────────────────────
+
+  function renderItemsPanel(ticketId) {
+    return getTicketItems(ticketId).then(function (items) {
+      var existingPanel = document.getElementById(ITEMS_PANEL_ID);
+      if (existingPanel) existingPanel.remove();
+
+      var submittedCount = items.filter(function (i) { return i.is_submitted; }).length;
+
+      var panel = el('div', 'margin:0 20px 20px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-family:inherit;font-size:14px;');
+      panel.id = ITEMS_PANEL_ID;
+
+      // Header
+      var header = el('div', 'padding:12px 16px;border-bottom:1px solid #d1d5db;display:flex;align-items:center;gap:12px;cursor:pointer;');
+      var headerTitle = el('strong', 'font-size:14px;');
+      headerTitle.textContent = 'Verwendete Artikel';
+      var headerStats = el('span', 'font-size:13px;color:#6b7280;');
+      headerStats.textContent = items.length + ' Artikel · ' + submittedCount + ' übertragen';
+      var arrow = el('span', 'margin-left:auto;');
+      arrow.textContent = '▼';
+      header.appendChild(headerTitle);
+      header.appendChild(headerStats);
+      header.appendChild(arrow);
+
+      // Body
+      var body = el('div', 'padding:12px 16px;');
+
+      if (items.length) {
+        var table = el('table', 'width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;');
+        table.innerHTML =
+          '<thead><tr style="border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:12px;">' +
+            '<th style="text-align:left;padding:4px 8px;">Artikel</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Artikelname</th>' +
+            '<th style="text-align:right;padding:4px 8px;">Menge</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Einheit</th>' +
+            '<th style="text-align:center;padding:4px 8px;">Status</th>' +
+            '<th style="text-align:center;padding:4px 8px;">Aktionen</th>' +
+          '</tr></thead><tbody></tbody>';
+
+        var tbody = table.querySelector('tbody');
+
+        items.forEach(function (row) {
+          var tr = el('tr', 'border-bottom:1px solid #f3f4f6;');
+          if (row.is_submitted) {
+            var statusTd = el('td', 'text-align:center;padding:4px 8px;');
+            statusTd.appendChild(badge('Übertragen', '#d1fae5', '#065f46'));
+            tr.innerHTML =
+              '<td style="padding:4px 8px;color:#9ca3af;">' + _escHtml(row.item_code || '') + '</td>' +
+              '<td style="padding:4px 8px;color:#9ca3af;">' + _escHtml(row.item_name || '') + '</td>' +
+              '<td style="text-align:right;padding:4px 8px;color:#9ca3af;">' + (parseFloat(row.qty) || 0) + '</td>' +
+              '<td style="padding:4px 8px;color:#9ca3af;">' + _escHtml(row.uom || '') + '</td>';
+            tr.appendChild(statusTd);
+            tr.appendChild(el('td', 'text-align:center;padding:4px 8px;'));
+          } else {
+            var qtyInput = el('input', 'width:60px;border:1px solid #d1d5db;border-radius:3px;padding:2px 4px;font-size:13px;text-align:right;');
+            qtyInput.type = 'number';
+            qtyInput.min = '0.01';
+            qtyInput.step = '0.01';
+            qtyInput.value = row.qty || 1;
+
+            var uomInput = el('input', 'width:80px;border:1px solid #d1d5db;border-radius:3px;padding:2px 4px;font-size:13px;');
+            uomInput.type = 'text';
+            uomInput.value = row.uom || '';
+
+            var delBtn = btn('🗑', 'border:1px solid #ef4444;background:#fff;color:#ef4444;padding:2px 6px;font-size:12px;', null);
+            delBtn.title = 'Artikel löschen';
+
+            var openStatusTd = el('td', 'text-align:center;padding:4px 8px;');
+            openStatusTd.appendChild(badge('Offen', '#fef3c7', '#92400e'));
+            var qtyTd = el('td', 'text-align:right;padding:4px 8px;');
+            qtyTd.appendChild(qtyInput);
+            var uomTd = el('td', 'padding:4px 8px;');
+            uomTd.appendChild(uomInput);
+            var actionsTd = el('td', 'text-align:center;padding:4px 8px;');
+            actionsTd.appendChild(delBtn);
+
+            tr.innerHTML =
+              '<td style="padding:4px 8px;">' + _escHtml(row.item_code || '') + '</td>' +
+              '<td style="padding:4px 8px;color:#6b7280;">' + _escHtml(row.item_name || '') + '</td>';
+            tr.appendChild(qtyTd);
+            tr.appendChild(uomTd);
+            tr.appendChild(openStatusTd);
+            tr.appendChild(actionsTd);
+
+            (function (rowName, qtyEl, uomEl, dBtn) {
+              qtyEl.addEventListener('change', function () {
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_ticket_item', {
+                  ticket_name: ticketId,
+                  row_name: rowName,
+                  data: JSON.stringify({ qty: parseFloat(qtyEl.value) || 1 }),
+                }).then(function () { renderItemsPanel(ticketId); });
+              });
+              uomEl.addEventListener('change', function () {
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_ticket_item', {
+                  ticket_name: ticketId,
+                  row_name: rowName,
+                  data: JSON.stringify({ uom: uomEl.value }),
+                }).then(function () { renderItemsPanel(ticketId); });
+              });
+              dBtn.addEventListener('click', function () {
+                if (!confirm('Artikel löschen?')) return;
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.delete_ticket_item', {
+                  ticket_name: ticketId,
+                  row_name: rowName,
+                }).then(function () { renderItemsPanel(ticketId); });
+              });
+            })(row.name, qtyInput, uomInput, delBtn);
+          }
+          tbody.appendChild(tr);
+        });
+
+        body.appendChild(table);
+      } else {
+        var emptyP = el('p', 'color:#9ca3af;font-size:13px;margin-bottom:12px;');
+        emptyP.textContent = 'Noch keine Artikel erfasst.';
+        body.appendChild(emptyP);
+      }
+
+      // Add item form
+      var addForm = el('div', 'display:flex;gap:8px;align-items:flex-start;flex-wrap:nowrap;margin-top:8px;padding-top:12px;border-top:1px solid #f0f0f0;');
+
+      var itemCodeWrap = el('div', 'display:flex;flex-direction:column;gap:2px;');
+      var itemCodeInput = el('input', 'border:1px solid #d1d5db;border-radius:3px;padding:4px 8px;font-size:13px;width:160px;');
+      itemCodeInput.type = 'text';
+      itemCodeInput.placeholder = 'Artikel-Code';
+
+      var itemNameSpan = el('span', 'font-size:11px;color:#6b7280;');
+      itemCodeWrap.appendChild(itemCodeInput);
+      itemCodeWrap.appendChild(itemNameSpan);
+
+      var addQtyInput = el('input', 'width:70px;border:1px solid #d1d5db;border-radius:3px;padding:4px 8px;font-size:13px;');
+      addQtyInput.type = 'number';
+      addQtyInput.min = '0.01';
+      addQtyInput.step = '0.01';
+      addQtyInput.value = '1';
+      addQtyInput.placeholder = 'Menge';
+
+      var addUomInput = el('input', 'width:80px;border:1px solid #d1d5db;border-radius:3px;padding:4px 8px;font-size:13px;');
+      addUomInput.type = 'text';
+      addUomInput.placeholder = 'Einheit';
+
+      var addItemBtn = btn('＋ Hinzufügen', 'border:1px solid #3b82f6;background:#3b82f6;color:#fff;', null);
+
+      // Validate item_code on blur and auto-fill item_name + uom
+      itemCodeInput.addEventListener('blur', function () {
+        var code = itemCodeInput.value.trim();
+        if (!code) { itemNameSpan.textContent = ''; return; }
+        apiFetch('/api/resource/Item/' + encodeURIComponent(code))
+          .then(function (res) {
+            if (res.data) {
+              itemNameSpan.textContent = res.data.item_name || code;
+              itemCodeInput.style.borderColor = '#d1d5db';
+              if (!addUomInput.value) addUomInput.value = res.data.stock_uom || '';
+            } else {
+              itemNameSpan.textContent = '(nicht gefunden)';
+              itemCodeInput.style.borderColor = '#ef4444';
+            }
+          }).catch(function () {
+            itemNameSpan.textContent = '(nicht gefunden)';
+            itemCodeInput.style.borderColor = '#ef4444';
+          });
+      });
+
+      addItemBtn.addEventListener('click', function () {
+        var code = itemCodeInput.value.trim();
+        if (!code) { itemCodeInput.style.borderColor = '#ef4444'; itemCodeInput.focus(); return; }
+        addItemBtn.disabled = true;
+        addItemBtn.textContent = '...';
+        apiMethod('custom_helpdesk.python_scripts.billing.portal_api.add_ticket_item', {
+          ticket_name: ticketId,
+          data: JSON.stringify({ item_code: code, qty: parseFloat(addQtyInput.value) || 1, uom: addUomInput.value.trim() }),
+        }).then(function (res) {
+          if (res.message) {
+            renderItemsPanel(ticketId);
+          } else {
+            alert('Fehler: ' + (res.exception || res._server_messages || 'Unbekannter Fehler'));
+            addItemBtn.disabled = false;
+            addItemBtn.textContent = '＋ Hinzufügen';
+          }
+        }).catch(function () {
+          addItemBtn.disabled = false;
+          addItemBtn.textContent = '＋ Hinzufügen';
+        });
+      });
+
+      addForm.appendChild(itemCodeWrap);
+      addForm.appendChild(addQtyInput);
+      addForm.appendChild(addUomInput);
+      addForm.appendChild(addItemBtn);
+      body.appendChild(addForm);
+
+      // Collapse toggle
+      var collapsed = false;
+      header.onclick = function () {
+        collapsed = !collapsed;
+        body.style.display = collapsed ? 'none' : 'block';
+        arrow.textContent = collapsed ? '▶' : '▼';
+      };
+
+      panel.appendChild(header);
+      panel.appendChild(body);
+      _insertPanel(panel);
+    }).catch(function (err) {
+      console.error('[custom_helpdesk] Items panel error:', err);
+    });
+  }
+
   function _escHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -699,6 +941,219 @@
     }, 800);
   }
 
+  // ── Closing dialog interceptor ──────────────────────────────────────────────
+
+  function installClosingInterceptor() {
+    if (_closingInterceptorInstalled) return;
+    _closingInterceptorInstalled = true;
+    document.addEventListener('click', function (e) {
+      var item = e.target.closest('[role="menuitem"]');
+      if (!item) return;
+      var label = item.textContent.replace(/\s+/g, ' ').trim();
+      if (!_closedStatusNames.has(label)) return;
+      var ticketId = agentTicketId();
+      if (!ticketId) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      // Close the Radix dropdown by simulating Escape
+      setTimeout(function () {
+        document.body.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true })
+        );
+      }, 0);
+      showClosingDialog(ticketId, label);
+    }, true); // capture phase
+  }
+
+  function showClosingDialog(ticketId, targetStatus) {
+    var existing = document.getElementById('ch-closing-overlay');
+    if (existing) existing.remove();
+
+    var overlay = el('div',
+      'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;' +
+      'display:flex;align-items:center;justify-content:center;'
+    );
+    overlay.id = 'ch-closing-overlay';
+
+    var dialog = el('div',
+      'background:#fff;border-radius:10px;padding:24px;width:500px;max-width:95vw;' +
+      'max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);'
+    );
+
+    var titleEl = el('h2', 'margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;');
+    titleEl.textContent = 'Ticket schließen';
+    dialog.appendChild(titleEl);
+
+    var statusBadge = el('p', 'margin:0 0 20px;font-size:13px;color:#6b7280;');
+    statusBadge.innerHTML = 'Neuer Status: <strong style="color:#374151;">' + targetStatus + '</strong>';
+    dialog.appendChild(statusBadge);
+
+    function sep(text) {
+      var s = el('div',
+        'margin:16px 0 8px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;' +
+        'letter-spacing:0.05em;border-top:1px solid #f3f4f6;padding-top:12px;'
+      );
+      s.textContent = text;
+      return s;
+    }
+
+    // ── Pflichtfelder ──
+    dialog.appendChild(sep('Pflichtfelder'));
+
+    function makeCheckbox(id, labelText) {
+      var wrap = el('label',
+        'display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;' +
+        'border-radius:6px;cursor:pointer;margin-bottom:8px;font-size:14px;color:#374151;'
+      );
+      var cb = el('input', 'width:16px;height:16px;cursor:pointer;flex-shrink:0;margin:0;');
+      cb.type = 'checkbox';
+      cb.id = id;
+      var lbl = el('span', '');
+      lbl.textContent = labelText;
+      wrap.appendChild(cb);
+      wrap.appendChild(lbl);
+      return { wrap: wrap, cb: cb };
+    }
+
+    var c1 = makeCheckbox('ch-close-cb1', 'Zeiteinträge sind vollständig erfasst');
+    var c2 = makeCheckbox('ch-close-cb2', 'Kunde wurde benachrichtigt');
+    dialog.appendChild(c1.wrap);
+    dialog.appendChild(c2.wrap);
+
+    // ── Klassifizierung ──
+    dialog.appendChild(sep('Klassifizierung'));
+
+    var klassiLbl = el('label', 'display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px;');
+    klassiLbl.textContent = 'Klassifizierung *';
+    var klassiSel = el('select',
+      'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;' +
+      'background:#fff;cursor:pointer;margin-bottom:4px;'
+    );
+    var defOpt = el('option', ''); defOpt.value = ''; defOpt.textContent = '-- Bitte wählen --';
+    klassiSel.appendChild(defOpt);
+    _klassifizierungOptions.forEach(function (name) {
+      var opt = el('option', ''); opt.value = name; opt.textContent = name;
+      klassiSel.appendChild(opt);
+    });
+    dialog.appendChild(klassiLbl);
+    dialog.appendChild(klassiSel);
+
+    // ── Schließungsstatus ──
+    dialog.appendChild(sep('Schließungsstatus'));
+
+    var statusLbl = el('label', 'display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px;');
+    statusLbl.textContent = 'Schließungsstatus *';
+    var statusSel = el('select',
+      'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;' +
+      'background:#fff;cursor:pointer;margin-bottom:4px;'
+    );
+    ['', 'Erfolglos', 'Erfolgreich', 'Keine Aktion erforderlich', 'Zwischenlösung'].forEach(function (val) {
+      var o = el('option', ''); o.value = val; o.textContent = val || '-- Bitte wählen --';
+      statusSel.appendChild(o);
+    });
+    dialog.appendChild(statusLbl);
+    dialog.appendChild(statusSel);
+
+    // ── Kommentare ──
+    dialog.appendChild(sep('Kommentar'));
+
+    var komLbl = el('label', 'display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px;');
+    komLbl.textContent = 'Kommentar (öffentlich)';
+    var komTA = el('textarea',
+      'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;' +
+      'font-family:inherit;resize:vertical;min-height:72px;box-sizing:border-box;margin-bottom:12px;'
+    );
+    komTA.placeholder = 'Abschlussnotiz für den Kunden …';
+    dialog.appendChild(komLbl);
+    dialog.appendChild(komTA);
+
+    var komIntLbl = el('label', 'display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px;');
+    komIntLbl.textContent = 'Kommentar (intern)';
+    var komIntTA = el('textarea',
+      'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;' +
+      'font-family:inherit;resize:vertical;min-height:72px;box-sizing:border-box;'
+    );
+    komIntTA.placeholder = 'Interne Notiz (nur für Agenten) …';
+    dialog.appendChild(komIntLbl);
+    dialog.appendChild(komIntTA);
+
+    // ── Buttons ──
+    var buttonRow = el('div',
+      'display:flex;gap:10px;justify-content:flex-end;margin-top:20px;' +
+      'padding-top:16px;border-top:1px solid #f3f4f6;'
+    );
+
+    var cancelBtn = btn('Abbrechen',
+      'border:1px solid #d1d5db;background:#fff;color:#374151;',
+      function () { overlay.remove(); }
+    );
+
+    var confirmBtn = el('button',
+      'padding:6px 16px;border-radius:4px;cursor:not-allowed;font-size:13px;' +
+      'border:1px solid #6366f1;background:#6366f1;color:#fff;opacity:0.4;'
+    );
+    confirmBtn.textContent = 'Ticket schließen';
+    confirmBtn.disabled = true;
+
+    function updateConfirm() {
+      var ok = c1.cb.checked && c2.cb.checked && klassiSel.value !== '' && statusSel.value !== '';
+      confirmBtn.disabled = !ok;
+      confirmBtn.style.opacity = ok ? '1' : '0.4';
+      confirmBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
+    }
+
+    c1.cb.addEventListener('change', updateConfirm);
+    c2.cb.addEventListener('change', updateConfirm);
+    klassiSel.addEventListener('change', updateConfirm);
+    statusSel.addEventListener('change', updateConfirm);
+
+    confirmBtn.addEventListener('click', function () {
+      if (confirmBtn.disabled) return;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Speichern …';
+      confirmBtn.style.opacity = '0.6';
+      confirmBtn.style.cursor = 'not-allowed';
+
+      var formData = {
+        zeiteintraege_vollstaendig: c1.cb.checked ? 1 : 0,
+        kunde_benachrichtigt: c2.cb.checked ? 1 : 0,
+        klassifizierung: klassiSel.value,
+        schliessungsstatus: statusSel.value,
+        schliessungs_kommentar: komTA.value,
+        schliessungs_kommentar_intern: komIntTA.value,
+      };
+
+      apiMethod('frappe.client.set_value', {
+        doctype: 'HD Ticket',
+        name: ticketId,
+        fieldname: 'status',
+        value: targetStatus,
+      }).then(function () {
+        return apiMethod(
+          'custom_helpdesk.python_scripts.billing.portal_api.save_closing_details',
+          { ticket_name: ticketId, data: JSON.stringify(formData) }
+        );
+      }).then(function () {
+        overlay.remove();
+        // Vue SPA reloads automatically via helpdesk:ticket-update realtime event
+        // triggered by HD Ticket's on_update hook
+      }).catch(function (err) {
+        console.error('[custom_helpdesk] Closing save error:', err);
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Ticket schließen';
+        confirmBtn.style.opacity = '1';
+        confirmBtn.style.cursor = 'pointer';
+      });
+    });
+
+    buttonRow.appendChild(cancelBtn);
+    buttonRow.appendChild(confirmBtn);
+    dialog.appendChild(buttonRow);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+  }
+
   // ── Route watcher ───────────────────────────────────────────────────────────
 
   var _lastPath = null;
@@ -723,7 +1178,9 @@
       // Delay to let Vue render the ticket page first
       _routeTimer = setTimeout(function () {
         renderTicketInfoPanel(agentId);
-        renderPanel(agentId);
+        renderPanel(agentId).then(function () {
+          renderItemsPanel(agentId);
+        });
       }, 1200);
     } else if (custId) {
       _routeTimer = setTimeout(function () { handleCustomerPortal(custId); }, 1000);
@@ -741,6 +1198,10 @@
   _patchHistory('pushState');
   _patchHistory('replaceState');
   window.addEventListener('popstate', handleRouteChange);
+
+  // Pre-load closed status names + Klassifizierung options, install interceptor
+  loadClosingData();
+  installClosingInterceptor();
 
   // Initial check (covers hard-load directly onto a ticket URL)
   setTimeout(handleRouteChange, 600);

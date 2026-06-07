@@ -7,9 +7,18 @@ Handles:
 - Recompute total_support_time and unbezahlte_supportzeit on ticket save
 """
 
+import math
+
 import frappe
 from frappe import _
 from frappe.utils import add_days, now_datetime, today
+
+
+def _round_up_quarter(hours):
+    """Ceiling to nearest 0.25 h — billing is in quarter-hour increments."""
+    if not hours:
+        return 0.0
+    return math.ceil(float(hours) * 4) / 4
 
 
 CLOSED_STATUS = "Geschlossen"
@@ -32,9 +41,9 @@ def _calculate_durations(doc):
             row.duration = round(raw, 4)
 
         if row.manual_override:
-            row.effective_duration = round(float(row.manual_override), 4)
+            row.effective_duration = _round_up_quarter(row.manual_override)
         elif row.duration:
-            row.effective_duration = round(float(row.duration), 4)
+            row.effective_duration = _round_up_quarter(row.duration)
 
         if row.price_category and row.effective_duration:
             pc_rate = frappe.db.get_value("Support Price Category", row.price_category, "price_per_hour") or 0
