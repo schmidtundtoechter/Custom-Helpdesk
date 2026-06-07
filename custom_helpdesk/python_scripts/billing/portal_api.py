@@ -65,6 +65,7 @@ def start_timer(ticket_name):
         "entered_by": frappe.session.user,
         "multiplier": "1",
         "staff_member": _agent_for_user(frappe.session.user),
+        "project": ticket.get("project") or "",
     })
     ticket.flags.ignore_permissions = True
     ticket.save()
@@ -111,6 +112,7 @@ def update_time_log(ticket_name, row_name, data):
     allowed = {
         "multiplier", "price_category", "manual_override", "staff_member",
         "ruecksprache_erforderlich", "description", "start_time", "end_time",
+        "project",
     }
     updates = {k: v for k, v in json.loads(data).items() if k in allowed}
     if not updates:
@@ -222,6 +224,18 @@ def delete_ticket_item(ticket_name, row_name):
         frappe.throw(_("Artikel nicht gefunden: {0}").format(row_name))
     ticket.flags.ignore_permissions = True
     ticket.save()
+
+
+@frappe.whitelist()
+def get_projects():
+    """Return active projects for the Projekt dropdown in Zeiterfassung panel."""
+    return frappe.get_all(
+        "Project",
+        filters={"status": ["not in", ["Completed", "Cancelled"]]},
+        fields=["name", "project_name"],
+        order_by="project_name asc",
+        limit=200,
+    )
 
 
 @frappe.whitelist()

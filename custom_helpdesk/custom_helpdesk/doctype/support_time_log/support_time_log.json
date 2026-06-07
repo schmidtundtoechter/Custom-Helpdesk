@@ -14,6 +14,7 @@
   "description",
   "col_break_1",
   "staff_member",
+  "project",
   "entered_by",
   "multiplier",
   "price_category",
@@ -79,6 +80,12 @@
    "in_list_view": 1,
    "label": "Staff Member",
    "options": "HD Agent"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
   },
   {
    "fieldname": "entered_by",

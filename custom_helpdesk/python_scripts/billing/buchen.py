@@ -82,8 +82,6 @@ def _create_timesheet(ticket, rows, customer_name):
     ts.customer = customer_name
     ts.note = f"HD Ticket: {ticket.name} — {ticket.subject or ''}"
 
-    if ticket.get("project"):
-        ts.project = ticket.project
 
     for row in rows:
         price_per_hour = 0.0
@@ -112,7 +110,7 @@ def _create_timesheet(ticket, rows, customer_name):
             "billing_rate": price_per_hour,
             "billing_amount": billed_hours * price_per_hour,
             "is_billable": 1,
-            "project": ticket.get("project") or "",
+            "project": row.get("project") or ticket.get("project") or "",
             "description": _build_description(ticket.name, row),
         })
 

@@ -89,6 +89,18 @@
     });
   }
 
+  var _projectCache = null;
+
+  function getProjects() {
+    if (_projectCache) return Promise.resolve(_projectCache);
+    return apiMethod(
+      'custom_helpdesk.python_scripts.billing.portal_api.get_projects', {}
+    ).then(function (res) {
+      _projectCache = res.message || [];
+      return _projectCache;
+    });
+  }
+
   // ── Time log data ───────────────────────────────────────────────────────────
 
   function getTimeLogs(ticketName) {
@@ -261,10 +273,11 @@
   }
 
   function renderPanel(ticketId) {
-    return Promise.all([getTimeLogs(ticketId), getPriceCategories(), getAgents()]).then(function (results) {
+    return Promise.all([getTimeLogs(ticketId), getPriceCategories(), getAgents(), getProjects()]).then(function (results) {
       var logs = results[0];
       var priceCats = results[1];
       var agents = results[2];
+      var projects = results[3];
       var pcMap = {};
       priceCats.forEach(function (p) { pcMap[p.name] = p; });
 
@@ -332,6 +345,7 @@
             '<th style="text-align:left;padding:4px 8px;">Preiskategorie</th>' +
             '<th style="text-align:right;padding:4px 8px;">Gesamt (h)</th>' +
             '<th style="text-align:left;padding:4px 8px;">Mitarbeiter</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Projekt</th>' +
             '<th style="text-align:center;padding:4px 8px;">Rücksprache</th>' +
             '<th style="padding:4px 8px;">Status</th>' +
           '</tr></thead><tbody></tbody>';
@@ -368,13 +382,14 @@
               '<td style="padding:4px 8px;">' + pcLabel + '</td>' +
               '<td style="text-align:right;padding:4px 8px;">' + total.toFixed(2) + '</td>' +
               '<td style="padding:4px 8px;">' + (row.staff_member || '–') + '</td>' +
+              '<td style="padding:4px 8px;color:#374151;font-size:12px;">' + (function() { var p = projects.find(function(x){ return x.name === row.project; }); return _escHtml(p ? p.project_name : (row.project || '–')); })() + '</td>' +
               '<td style="text-align:center;padding:4px 8px;color:' + (row.ruecksprache_erforderlich ? '#d97706' : 'inherit') + ';">' + (row.ruecksprache_erforderlich ? '✓' : '') + '</td>';
             tr.appendChild(statusCell);
             tbody.appendChild(tr);
             // F5 — show description below locked row if present
             if (row.description) {
               var descTrL = el('tr', 'background:#f9fafb;');
-              descTrL.innerHTML = '<td colspan="10" style="padding:2px 8px 6px 36px;color:#6b7280;font-size:12px;font-style:italic;">' +
+              descTrL.innerHTML = '<td colspan="11" style="padding:2px 8px 6px 36px;color:#6b7280;font-size:12px;font-style:italic;">' +
                 _escHtml(row.description) + '</td>';
               tbody.appendChild(descTrL);
             }
@@ -440,6 +455,16 @@
               '</td>' +
               '<td style="text-align:right;padding:4px 8px;" class="ch-tot-' + row.name + '">' + total.toFixed(2) + '</td>' +
               '<td style="padding:4px 8px;">' + staffSelect + '</td>' +
+              '<td style="padding:4px 8px;">' +
+                '<select class="ch-project" data-row="' + row.name + '" style="border:1px solid #d1d5db;border-radius:3px;padding:2px;max-width:160px;">' +
+                '<option value="">– wählen –</option>' +
+                projects.map(function (p) {
+                  return '<option value="' + _escHtml(p.name) + '"' +
+                    (p.name === row.project ? ' selected' : '') + '>' +
+                    _escHtml(p.project_name || p.name) + '</option>';
+                }).join('') +
+                '</select>' +
+              '</td>' +
               '<td style="text-align:center;padding:4px 8px;">' +
                 '<input type="checkbox" class="ch-rueck" data-row="' + row.name + '"' + (row.ruecksprache_erforderlich ? ' checked' : '') + ' style="cursor:pointer;width:16px;height:16px;">' +
               '</td>';
@@ -491,6 +516,18 @@
                   ticket_name: ticketId,
                   row_name: staffSel.dataset.row,
                   data: JSON.stringify({ staff_member: staffSel.value }),
+                });
+              });
+            }
+
+            // Project input
+            var projSel = tr.querySelector('.ch-project');
+            if (projSel) {
+              projSel.addEventListener('change', function () {
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                  ticket_name: ticketId,
+                  row_name: projSel.dataset.row,
+                  data: JSON.stringify({ project: projSel.value }),
                 });
               });
             }
@@ -549,7 +586,7 @@
             // F5 — description input sub-row for editable rows
             var descTrE = el('tr', 'background:#fafafa;border-bottom:1px solid #f0f0f0;');
             var descTd = el('td', 'padding:2px 8px 6px 36px;');
-            descTd.setAttribute('colspan', '10');
+            descTd.setAttribute('colspan', '11');
             var descInput = document.createElement('input');
             descInput.type = 'text';
             descInput.style.cssText = 'width:100%;border:1px solid #e5e7eb;border-radius:3px;padding:3px 6px;font-size:12px;box-sizing:border-box;';
