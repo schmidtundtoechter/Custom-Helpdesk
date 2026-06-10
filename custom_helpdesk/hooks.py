@@ -172,6 +172,10 @@ doc_events = {
         "on_submit": "custom_helpdesk.python_scripts.billing.support_invoice.on_sales_invoice_submit",
         "on_cancel": "custom_helpdesk.python_scripts.billing.support_invoice.on_sales_invoice_cancel",
     },
+    # Timesheet: recalculate billing_amount with custom_rabatt discount after ERPNext's validate
+    "Timesheet": {
+        "validate": "custom_helpdesk.python_scripts.billing.timesheet_hooks.on_timesheet_validate",
+    },
 }
 
 # Fixtures — custom fields applied on migrate
@@ -195,7 +199,7 @@ fixtures = [
                 "Timesheet-custom_support_invoiced",
                 "Sales Invoice-custom_support_timesheet_refs",
                 "Customer-dienstleistungsrabatt",
-                "Sales Invoice Timesheet-custom_rabatt",
+                "Timesheet Detail-custom_rabatt",
                 "HD Ticket-support_items_section",
                 "HD Ticket-support_items",
                 "Timesheet-support_items",
@@ -235,6 +239,7 @@ fixtures = [
         "filters": [
             ["name", "in", [
                 "Ausgangsrechnung - Timesheets ggf. zu Projekten importieren und Supportk. anrechnen",
+                "Timesheet - Kundenrabatt auf Zeitpositionen vorbelegen",
             ]],
         ],
     },

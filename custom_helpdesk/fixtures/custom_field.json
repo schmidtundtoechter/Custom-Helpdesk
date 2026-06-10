@@ -186,15 +186,17 @@
   },
   {
     "doctype": "Custom Field",
-    "dt": "Sales Invoice Timesheet",
+    "dt": "Timesheet Detail",
     "fieldname": "custom_rabatt",
     "fieldtype": "Int",
     "label": "Rabatt",
-    "description": "in %",
-    "insert_after": "billing_amount",
-    "in_list_view": 0,
+    "description": "in % – wird aus Kundenrabatt vorbelegt",
+    "default": "0",
+    "insert_after": "billing_hours",
+    "allow_on_submit": 1,
+    "in_list_view": 1,
     "print_hide": 0,
-    "name": "Sales Invoice Timesheet-custom_rabatt"
+    "name": "Timesheet Detail-custom_rabatt"
   },
   {
     "doctype": "Custom Field",

@@ -7,7 +7,7 @@ rows on an HD Ticket. Can be called multiple times per ticket (interim billing).
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import now_datetime, flt, cint
 
 
 @frappe.whitelist()
@@ -82,6 +82,9 @@ def _create_timesheet(ticket, rows, customer_name):
     ts.customer = customer_name
     ts.note = f"HD Ticket: {ticket.name} — {ticket.subject or ''}"
 
+    rabatt = cint(
+        frappe.db.get_value("Customer", customer_name, "dienstleistungsrabatt") or 0
+    ) if customer_name else 0
 
     for row in rows:
         price_per_hour = 0.0
@@ -100,6 +103,7 @@ def _create_timesheet(ticket, rows, customer_name):
         effective = float(row.effective_duration or 0)
         multiplier = int(row.multiplier or 1)
         billed_hours = effective * multiplier
+        billing_amount = flt(billed_hours * price_per_hour * (1 - rabatt / 100), 2)
 
         ts.append("time_logs", {
             "activity_type": time_code or "Support",
@@ -108,7 +112,8 @@ def _create_timesheet(ticket, rows, customer_name):
             "hours": billed_hours,
             "billing_hours": billed_hours,
             "billing_rate": price_per_hour,
-            "billing_amount": billed_hours * price_per_hour,
+            "billing_amount": billing_amount,
+            "custom_rabatt": rabatt,
             "is_billable": 1,
             "project": row.get("project") or ticket.get("project") or "",
             "description": _build_description(ticket.name, row),

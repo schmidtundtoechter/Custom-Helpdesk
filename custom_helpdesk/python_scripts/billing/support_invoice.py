@@ -47,7 +47,7 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
         fields=[
             "name", "parent", "from_time",
             "billing_hours", "hours", "billing_rate", "billing_amount",
-            "activity_type", "project",
+            "activity_type", "project", "custom_rabatt",
         ],
         order_by="from_time asc",
     )
@@ -102,7 +102,8 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
             "category_name": act_type_cache[cache_key],
             "hours": flt(d.billing_hours or d.hours, 4),
             "rate": flt(d.billing_rate, 2),
-            "amount": flt(d.billing_amount, 2),
+            "amount": flt(d.billing_amount, 2),  # already includes discount
+            "rabatt": cint(d.custom_rabatt or 0),  # informational only
         })
 
     customer_rabatt = cint(
@@ -133,9 +134,8 @@ def import_support_invoice_candidates(
 
     for row in selected_rows:
         cat = (row.get("category_name") or "").strip()
-        rabatt = cint(row.get("rabatt") or 0)
-        raw_amount = flt(row.get("amount", 0))
-        discounted = flt(raw_amount * (1 - rabatt / 100), 2)
+        # billing_amount already has the discount baked in from the Timesheet validate hook
+        discounted = flt(row.get("amount", 0), 2)
         if cat not in category_totals:
             category_totals[cat] = 0.0
         category_totals[cat] += discounted
