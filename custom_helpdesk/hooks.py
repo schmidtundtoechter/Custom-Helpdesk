@@ -210,10 +210,6 @@ fixtures = [
         ],
     },
     {
-        "doctype": "HD Klassifizierung",
-        "filters": [],
-    },
-    {
         "doctype": "HD Ticket Status",
         "filters": [
             ["name", "in", [
