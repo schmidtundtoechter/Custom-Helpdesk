@@ -55,7 +55,7 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
     from_dt = getdate(from_date)
     to_dt = getdate(to_date)
 
-    # Cache: activity_type → Support Price Category.category_name
+    # Cache: (activity_type, billing_rate) → Support Price Category.category_name
     act_type_cache = {}
 
     rows = []
@@ -65,20 +65,41 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
             continue
 
         act_type = d.activity_type or ""
-        if act_type not in act_type_cache:
-            pc_name = frappe.db.get_value(
-                "Support Price Category",
-                {"activity_type": act_type, "is_active": 1},
-                "category_name",
-            )
-            act_type_cache[act_type] = pc_name or act_type
+        billing_rate = flt(d.billing_rate, 2)
+        cache_key = (act_type, billing_rate)
+
+        if cache_key not in act_type_cache:
+            pc_name = None
+            # 1. Try by activity_type (properly configured price categories)
+            if act_type:
+                pc_name = frappe.db.get_value(
+                    "Support Price Category",
+                    {"activity_type": act_type, "is_active": 1},
+                    "category_name",
+                )
+            # 2. Try by category_name (buchen now stores category_name as activity_type
+            #    when activity_type is blank on the price category)
+            if not pc_name and act_type:
+                pc_name = frappe.db.get_value(
+                    "Support Price Category",
+                    {"category_name": act_type, "is_active": 1},
+                    "category_name",
+                )
+            # 3. Fallback by billing_rate (handles old timesheets created before this fix)
+            if not pc_name and billing_rate:
+                pc_name = frappe.db.get_value(
+                    "Support Price Category",
+                    {"price_per_hour": billing_rate, "is_active": 1},
+                    "category_name",
+                )
+            act_type_cache[cache_key] = pc_name or act_type or "Support"
 
         rows.append({
             "timesheet": d.parent,
             "timesheet_detail": d.name,
             "date": str(detail_date or ""),
             "project": d.project or "",
-            "category_name": act_type_cache[act_type],
+            "category_name": act_type_cache[cache_key],
             "hours": flt(d.billing_hours or d.hours, 4),
             "rate": flt(d.billing_rate, 2),
             "amount": flt(d.billing_amount, 2),
