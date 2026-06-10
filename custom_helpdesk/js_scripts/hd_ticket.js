@@ -4,6 +4,7 @@ frappe.ui.form.on("HD Ticket", {
         _add_timer_buttons(frm);
         _render_buchen_history(frm);
         _show_unbezahlte_supportzeit(frm);
+        _set_project_filters(frm);
     },
 
     before_save(frm) {
@@ -186,4 +187,16 @@ function _show_unbezahlte_supportzeit(frm) {
             true
         );
     }
+}
+
+// ── Project filters ────────────────────────────────────────────────────────
+
+function _set_project_filters(frm) {
+    const query = function() {
+        const filters = { status: "Open" };
+        if (frm.doc.customer) filters.customer = frm.doc.customer;
+        return { filters };
+    };
+    frm.set_query("project", query);
+    frm.set_query("project", "support_time_logs", query);
 }
