@@ -157,7 +157,7 @@ def get_buchen_history(ticket_name):
     result = []
     for ts_name, ts_time in seen.items():
         total_hours = frappe.db.get_value(
-            "Timesheet", ts_name, "total_hours"
+            "Timesheet", ts_name, "total_billable_hours"
         ) or 0
         result.append({
             "timesheet": ts_name,
