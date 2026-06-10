@@ -1,0 +1,102 @@
+{
+ "actions": [],
+ "autoname": "HD-TRM-.YYYY.-.####",
+ "creation": "2026-06-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "type",
+  "color",
+  "col_break_1",
+  "from_time",
+  "to_time",
+  "sec_break_1",
+  "description",
+  "ticket",
+  "assigned_to"
+ ],
+ "fields": [
+  {
+   "fieldname": "type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Typ",
+   "options": "Notdienst\nUrlaub\nHome Office\nAußer Haus\nRemote-Inhouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Farbe",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "from_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Von",
+   "reqd": 1
+  },
+  {
+   "fieldname": "to_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Bis",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Beschreibung"
+  },
+  {
+   "fieldname": "ticket",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Ticket",
+   "options": "HD Ticket"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Zugewiesen an",
+   "options": "User"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-06-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Custom Helpdesk",
+ "name": "HD Termin",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "All",
+   "share": 0,
+   "write": 1
+  }
+ ],
+ "sort_field": "from_time",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 0
+}

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Helpdesk Kalender</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; }
+
+    .ch-header {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .ch-header h1 { font-size: 20px; font-weight: 600; color: #111827; }
+    .ch-back { color: #6b7280; text-decoration: none; font-size: 14px; }
+    .ch-back:hover { color: #111827; }
+    .ch-new-btn {
+      margin-left: auto;
+      padding: 6px 14px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .ch-new-btn:hover { background: #4f46e5; }
+
+    .ch-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 12px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .ch-legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151; }
+    .ch-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    #ch-cal-wrap { padding: 20px 24px; }
+    #ch-calendar { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+    /* Modal overlay */
+    .ch-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5);
+      z-index: 9999; display: flex; align-items: center; justify-content: center;
+    }
+    .ch-modal {
+      background: #fff; border-radius: 10px; padding: 24px;
+      width: 460px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .ch-modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #111827; }
+    .ch-field { margin-bottom: 14px; }
+    .ch-field label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 4px; }
+    .ch-field select, .ch-field input, .ch-field textarea {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 8px 10px; font-size: 14px; font-family: inherit;
+    }
+    .ch-field textarea { resize: vertical; min-height: 60px; }
+    .ch-btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f3f4f6; }
+    .ch-btn-cancel { padding: 6px 14px; border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .ch-btn-save { padding: 6px 14px; border: none; background: #6366f1; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .ch-btn-save:hover { background: #4f46e5; }
+    .ch-btn-del { padding: 6px 14px; border: 1px solid #ef4444; background: #fff; color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  </style>
+  <script>var __csrf_token = "{{ csrf_token }}";</script>
+</head>
+<body>
+
+<div class="ch-header">
+  <a href="/helpdesk" class="ch-back">← Helpdesk</a>
+  <h1>📅 Kalender</h1>
+  <button class="ch-new-btn" id="ch-top-new-btn">+ Neuer Termin</button>
+</div>
+
+<div class="ch-legend">
+  <div class="ch-legend-item"><div class="ch-dot" style="background:#8B0000"></div>Notdienst</div>
+  <div class="ch-legend-item"><div class="ch-dot" style="background:#2E7D32"></div>Urlaub</div>
+  <div class="ch-legend-item"><div class="ch-dot" style="background:#E57373"></div>Home Office</div>
+  <div class="ch-legend-item"><div class="ch-dot" style="background:#F57C00"></div>Außer Haus</div>
+  <div class="ch-legend-item"><div class="ch-dot" style="background:#1565C0"></div>Remote-Inhouse</div>
+</div>
+
+<div id="ch-cal-wrap">
+  <div id="ch-calendar"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script>
+(function () {
+  var calendar;
+
+  function getCsrfToken() {
+    // Prefer server-injected token; fall back to frappe global if available
+    if (__csrf_token && __csrf_token !== 'None') return __csrf_token;
+    if (window.frappe && window.frappe.csrf_token) return window.frappe.csrf_token;
+    return '';
+  }
+
+  function api(method, args) {
+    return fetch('/api/method/' + method, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Frappe-CSRF-Token': getCsrfToken(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(args || {}),
+    }).then(function (r) { return r.json(); });
+  }
+
+  function loadEvents(fetchInfo, successCb, failCb) {
+    // GET request — no CSRF token required for read-only endpoints
+    fetch('/api/method/custom_helpdesk.python_scripts.termine.termine_api.get_all_termine', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var items = (res.message || []).map(function (t) {
+          return {
+            id: t.name,
+            title: t.type + (t.assigned_to ? ' – ' + t.assigned_to.split('@')[0] : ''),
+            start: (t.from_time || '').replace(' ', 'T'),
+            end: (t.to_time || '').replace(' ', 'T'),
+            color: t.color || '#607D8B',
+            extendedProps: t,
+          };
+        });
+        successCb(items);
+      })
+      .catch(failCb);
+  }
+
+  // Script is at end of body — DOM is ready, no need for DOMContentLoaded.
+  // Initialize directly to avoid potential double-fire when CDN script loads asynchronously.
+  (function initCalendar() {
+    var newBtn = document.getElementById('ch-top-new-btn');
+    if (newBtn) newBtn.addEventListener('click', function () { openNewForm(); });
+
+    var calEl = document.getElementById('ch-calendar');
+    if (!calEl) return;
+
+    // Destroy any prior instance to prevent doubling on hot-reload or re-entry
+    if (calEl._fcInstance) {
+      calEl._fcInstance.destroy();
+      calEl._fcInstance = null;
+    }
+
+    calendar = new FullCalendar.Calendar(calEl, {
+      initialView: 'dayGridMonth',
+      locale: 'de',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+      },
+      events: loadEvents,
+      eventClick: function (info) {
+        var p = info.event.extendedProps;
+        openEditForm(p);
+      },
+      eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+    });
+    calendar.render();
+    calEl._fcInstance = calendar;
+  })();
+
+  // ── New / Edit form ──────────────────────────────────────────────────────────
+
+  function openNewForm(prefill) {
+    showModal(null, prefill || {});
+  }
+
+  function openEditForm(termin) {
+    showModal(termin.name, termin);
+  }
+
+  function showModal(terminName, data) {
+    var existing = document.getElementById('ch-modal-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'ch-overlay';
+    overlay.id = 'ch-modal-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'ch-modal';
+
+    var title = document.createElement('h2');
+    title.textContent = terminName ? 'Termin bearbeiten' : 'Neuer Termin';
+    modal.appendChild(title);
+
+    function field(labelText, content) {
+      var wrap = document.createElement('div');
+      wrap.className = 'ch-field';
+      var lbl = document.createElement('label');
+      lbl.textContent = labelText;
+      wrap.appendChild(lbl);
+      wrap.appendChild(content);
+      return wrap;
+    }
+
+    // Type select
+    var typeSel = document.createElement('select');
+    ['', 'Notdienst', 'Urlaub', 'Home Office', 'Außer Haus', 'Remote-Inhouse'].forEach(function (v) {
+      var o = document.createElement('option');
+      o.value = v; o.textContent = v || '– Typ wählen –';
+      if (v === data.type) o.selected = true;
+      typeSel.appendChild(o);
+    });
+    modal.appendChild(field('Typ *', typeSel));
+
+    // From
+    var fromInput = document.createElement('input');
+    fromInput.type = 'datetime-local';
+    if (data.from_time) fromInput.value = String(data.from_time).slice(0, 16).replace(' ', 'T');
+    modal.appendChild(field('Von *', fromInput));
+
+    // To
+    var toInput = document.createElement('input');
+    toInput.type = 'datetime-local';
+    if (data.to_time) toInput.value = String(data.to_time).slice(0, 16).replace(' ', 'T');
+    modal.appendChild(field('Bis *', toInput));
+
+    // Description
+    var descTA = document.createElement('textarea');
+    descTA.value = data.description || '';
+    descTA.placeholder = 'Beschreibung …';
+    modal.appendChild(field('Beschreibung', descTA));
+
+    // Assigned to
+    var assignedInput = document.createElement('input');
+    assignedInput.type = 'text';
+    assignedInput.value = data.assigned_to || '';
+    assignedInput.placeholder = 'user@example.com';
+    modal.appendChild(field('Zugewiesen an (E-Mail)', assignedInput));
+
+    // Ticket
+    var ticketInput = document.createElement('input');
+    ticketInput.type = 'text';
+    ticketInput.value = data.ticket || '';
+    ticketInput.placeholder = 'HD-00001';
+    modal.appendChild(field('Ticket-Link', ticketInput));
+
+    // Buttons
+    var btnRow = document.createElement('div');
+    btnRow.className = 'ch-btn-row';
+
+    if (terminName) {
+      var delBtn = document.createElement('button');
+      delBtn.className = 'ch-btn-del';
+      delBtn.textContent = 'Löschen';
+      delBtn.onclick = function () {
+        if (!confirm('Termin löschen?')) return;
+        api('custom_helpdesk.python_scripts.termine.termine_api.delete_termin', { termin_name: terminName })
+          .then(function () { overlay.remove(); calendar.refetchEvents(); });
+      };
+      btnRow.appendChild(delBtn);
+    }
+
+    var spacer = document.createElement('span');
+    spacer.style.flex = '1';
+    btnRow.appendChild(spacer);
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ch-btn-cancel';
+    cancelBtn.textContent = 'Abbrechen';
+    cancelBtn.onclick = function () { overlay.remove(); };
+    btnRow.appendChild(cancelBtn);
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'ch-btn-save';
+    saveBtn.textContent = terminName ? 'Speichern' : 'Erstellen';
+    saveBtn.onclick = function () {
+      if (!typeSel.value) { typeSel.style.borderColor = '#ef4444'; typeSel.focus(); return; }
+      if (!fromInput.value) { fromInput.style.borderColor = '#ef4444'; fromInput.focus(); return; }
+      if (!toInput.value) { toInput.style.borderColor = '#ef4444'; toInput.focus(); return; }
+
+      var payload = {
+        type: typeSel.value,
+        from_time: fromInput.value.replace('T', ' ') + ':00',
+        to_time: toInput.value.replace('T', ' ') + ':00',
+        description: descTA.value,
+        assigned_to: assignedInput.value.trim(),
+        ticket: ticketInput.value.trim(),
+      };
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = '…';
+
+      if (terminName) {
+        // Update existing: delete + recreate (simpler than a PUT)
+        api('custom_helpdesk.python_scripts.termine.termine_api.delete_termin', { termin_name: terminName })
+          .then(function () {
+            return api('custom_helpdesk.python_scripts.termine.termine_api.add_termin', { data: JSON.stringify(payload) });
+          })
+          .then(function () { overlay.remove(); calendar.refetchEvents(); })
+          .catch(function (e) { console.error(e); saveBtn.disabled = false; saveBtn.textContent = 'Speichern'; });
+      } else {
+        api('custom_helpdesk.python_scripts.termine.termine_api.add_termin', { data: JSON.stringify(payload) })
+          .then(function () { overlay.remove(); calendar.refetchEvents(); })
+          .catch(function (e) { console.error(e); saveBtn.disabled = false; saveBtn.textContent = 'Erstellen'; });
+      }
+    };
+    btnRow.appendChild(saveBtn);
+    modal.appendChild(btnRow);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+})();
+</script>
+</body>
+</html>

@@ -139,6 +139,15 @@
   var PANEL_ID = 'ch-zeiterfassung-panel';
   var TICKET_INFO_ID = 'ch-ticket-info-panel';
   var ITEMS_PANEL_ID = 'ch-support-items-panel';
+  var TERMINE_PANEL_ID = 'ch-termine-panel';
+
+  var TERMIN_COLORS = {
+    'Notdienst': '#8B0000',
+    'Urlaub': '#2E7D32',
+    'Home Office': '#E57373',
+    'Außer Haus': '#F57C00',
+    'Remote-Inhouse': '#1565C0',
+  };
 
   // F4 — globals for MutationObserver panel re-injection
   var _mutationObserver = null;
@@ -183,6 +192,7 @@
           renderPanel(ticketId).then(function () {
             _reinjecting = false;
             renderItemsPanel(ticketId);
+            renderTerminePanel(ticketId);
           });
         }, 400);
       }
@@ -191,7 +201,10 @@
   }
 
   function renderBoth(ticketId) {
-    return renderPanel(ticketId).then(function () { renderItemsPanel(ticketId); });
+    return renderPanel(ticketId).then(function () {
+      renderItemsPanel(ticketId);
+      renderTerminePanel(ticketId);
+    });
   }
 
   // ── Agent Zeiterfassung panel ───────────────────────────────────────────────
@@ -205,6 +218,8 @@
     if (info) info.remove();
     var items = document.getElementById(ITEMS_PANEL_ID);
     if (items) items.remove();
+    var termine = document.getElementById(TERMINE_PANEL_ID);
+    if (termine) termine.remove();
   }
 
   // ── F6 — Ticket Info panel (Project + Support Category) ────────────────────
@@ -920,6 +935,203 @@
     });
   }
 
+  // ── HD Termine panel ───────────────────────────────────────────────────────
+
+  function renderTerminePanel(ticketId) {
+    apiMethod(
+      'custom_helpdesk.python_scripts.termine.termine_api.get_termine',
+      { ticket_name: ticketId }
+    ).then(function (res) {
+      var termine = res.message || [];
+
+      var existing = document.getElementById(TERMINE_PANEL_ID);
+      if (existing) existing.remove();
+
+      var panel = el('div', 'margin:0 20px 20px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-family:inherit;font-size:14px;');
+      panel.id = TERMINE_PANEL_ID;
+
+      // Header
+      var header = el('div', 'padding:12px 16px;border-bottom:1px solid #d1d5db;display:flex;align-items:center;gap:12px;cursor:pointer;');
+      var headerTitle = el('strong', 'font-size:14px;');
+      headerTitle.textContent = 'Termine';
+      var headerStats = el('span', 'font-size:13px;color:#6b7280;');
+      headerStats.textContent = termine.length + ' Termin(e)';
+      var kalLink = el('a', 'margin-left:8px;font-size:12px;color:#6366f1;text-decoration:none;');
+      kalLink.href = '/helpdesk-kalender';
+      kalLink.target = '_blank';
+      kalLink.textContent = '📅 Kalender öffnen';
+      kalLink.onclick = function (e) { e.stopPropagation(); };
+      var arrow = el('span', 'margin-left:auto;');
+      arrow.textContent = '▼';
+      header.appendChild(headerTitle);
+      header.appendChild(headerStats);
+      header.appendChild(kalLink);
+      header.appendChild(arrow);
+
+      var body = el('div', 'padding:12px 16px;');
+
+      // Existing termine list
+      if (termine.length) {
+        var tList = el('div', 'margin-bottom:12px;');
+        termine.forEach(function (t) {
+          var color = TERMIN_COLORS[t.type] || '#607D8B';
+          var row = el('div',
+            'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;' +
+            'border:1px solid #e5e7eb;margin-bottom:6px;background:#fafafa;font-size:13px;'
+          );
+
+          var dot = el('span',
+            'width:10px;height:10px;border-radius:50%;flex-shrink:0;background:' + color + ';'
+          );
+          row.appendChild(dot);
+
+          var typeBadge = el('span',
+            'padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;' +
+            'color:#fff;background:' + color + ';white-space:nowrap;flex-shrink:0;'
+          );
+          typeBadge.textContent = t.type;
+          row.appendChild(typeBadge);
+
+          var timeSpan = el('span', 'color:#374151;white-space:nowrap;');
+          timeSpan.textContent = fmtDT(t.from_time) + ' – ' + fmtDT(t.to_time);
+          row.appendChild(timeSpan);
+
+          if (t.description) {
+            var descSpan = el('span', 'color:#6b7280;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;');
+            descSpan.textContent = t.description;
+            row.appendChild(descSpan);
+          } else {
+            row.appendChild(el('span', 'flex:1;'));
+          }
+
+          if (t.assigned_to) {
+            var assignSpan = el('span', 'color:#6b7280;font-size:12px;white-space:nowrap;');
+            assignSpan.textContent = t.assigned_to.split('@')[0];
+            row.appendChild(assignSpan);
+          }
+
+          var delBtn = el('button',
+            'border:1px solid #ef4444;background:#fff;color:#ef4444;border-radius:4px;' +
+            'padding:2px 6px;font-size:11px;cursor:pointer;flex-shrink:0;',
+            {}
+          );
+          delBtn.textContent = '✕';
+          delBtn.title = 'Termin löschen';
+          (function (terminName) {
+            delBtn.addEventListener('click', function () {
+              if (!confirm('Termin löschen?')) return;
+              apiMethod(
+                'custom_helpdesk.python_scripts.termine.termine_api.delete_termin',
+                { termin_name: terminName }
+              ).then(function () { renderTerminePanel(ticketId); });
+            });
+          })(t.name);
+          row.appendChild(delBtn);
+
+          tList.appendChild(row);
+        });
+        body.appendChild(tList);
+      } else {
+        var emptyP = el('p', 'color:#9ca3af;font-size:13px;margin-bottom:12px;');
+        emptyP.textContent = 'Noch keine Termine für dieses Ticket.';
+        body.appendChild(emptyP);
+      }
+
+      // ── New Termin inline form ──
+      var formWrap = el('div', 'border-top:1px solid #f0f0f0;padding-top:12px;');
+      var formTitle = el('strong', 'font-size:13px;color:#374151;display:block;margin-bottom:8px;');
+      formTitle.textContent = '+ Neuer Termin';
+      formWrap.appendChild(formTitle);
+
+      var formGrid = el('div', 'display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;');
+
+      function fld(labelText, inputEl) {
+        var wrap = el('div', 'display:flex;flex-direction:column;gap:2px;');
+        var lbl = el('label', 'font-size:11px;color:#6b7280;');
+        lbl.textContent = labelText;
+        wrap.appendChild(lbl);
+        wrap.appendChild(inputEl);
+        return wrap;
+      }
+
+      var typeSel = el('select', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;');
+      ['', 'Notdienst', 'Urlaub', 'Home Office', 'Außer Haus', 'Remote-Inhouse'].forEach(function (v) {
+        var o = el('option', ''); o.value = v; o.textContent = v || '– Typ –';
+        typeSel.appendChild(o);
+      });
+      formGrid.appendChild(fld('Typ *', typeSel));
+
+      var fromInput = el('input', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;');
+      fromInput.type = 'datetime-local';
+      formGrid.appendChild(fld('Von *', fromInput));
+
+      var toInput = el('input', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;');
+      toInput.type = 'datetime-local';
+      formGrid.appendChild(fld('Bis *', toInput));
+
+      var descInput = el('input', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;width:180px;');
+      descInput.type = 'text';
+      descInput.placeholder = 'Beschreibung';
+      formGrid.appendChild(fld('Beschreibung', descInput));
+
+      var assignedInput = el('input', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;width:160px;');
+      assignedInput.type = 'text';
+      assignedInput.placeholder = 'user@example.com';
+      formGrid.appendChild(fld('Zugewiesen an', assignedInput));
+
+      var addBtn = btn('Speichern',
+        'border:1px solid #6366f1;background:#6366f1;color:#fff;align-self:flex-end;',
+        function () {
+          if (!typeSel.value) { typeSel.style.borderColor = '#ef4444'; typeSel.focus(); return; }
+          if (!fromInput.value) { fromInput.style.borderColor = '#ef4444'; fromInput.focus(); return; }
+          if (!toInput.value) { toInput.style.borderColor = '#ef4444'; toInput.focus(); return; }
+
+          addBtn.disabled = true;
+          addBtn.textContent = '…';
+          apiMethod(
+            'custom_helpdesk.python_scripts.termine.termine_api.add_termin',
+            {
+              data: JSON.stringify({
+                type: typeSel.value,
+                from_time: fromInput.value.replace('T', ' ') + ':00',
+                to_time: toInput.value.replace('T', ' ') + ':00',
+                description: descInput.value,
+                assigned_to: assignedInput.value.trim(),
+                ticket: ticketId,
+              }),
+            }
+          ).then(function (res) {
+            if (res.message) {
+              renderTerminePanel(ticketId);
+            } else {
+              alert('Fehler: ' + (res.exception || res._server_messages || 'Unbekannter Fehler'));
+              addBtn.disabled = false;
+              addBtn.textContent = 'Speichern';
+            }
+          });
+        }
+      );
+      formGrid.appendChild(addBtn);
+
+      formWrap.appendChild(formGrid);
+      body.appendChild(formWrap);
+
+      // Collapse toggle
+      var collapsed = false;
+      header.onclick = function () {
+        collapsed = !collapsed;
+        body.style.display = collapsed ? 'none' : 'block';
+        arrow.textContent = collapsed ? '▶' : '▼';
+      };
+
+      panel.appendChild(header);
+      panel.appendChild(body);
+      _insertPanel(panel);
+    }).catch(function (err) {
+      console.error('[custom_helpdesk] Termine panel error:', err);
+    });
+  }
+
   function _escHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -1191,6 +1403,28 @@
     document.body.appendChild(overlay);
   }
 
+  // ── Kalender sidebar link ───────────────────────────────────────────────────
+
+  function injectKalenderSidebarLink() {
+    if (document.getElementById('ch-kalender-link')) return;
+    // The Helpdesk SPA sidebar contains <a> tags for navigation items.
+    // Find the nav wrapper by looking for a known helpdesk path link.
+    var sidebarAnchors = document.querySelectorAll('aside a, nav a, [class*="sidebar"] a');
+    if (!sidebarAnchors.length) return;
+    var lastAnchor = sidebarAnchors[sidebarAnchors.length - 1];
+    var parent = lastAnchor && lastAnchor.parentElement;
+    if (!parent) return;
+
+    var link = document.createElement('a');
+    link.id = 'ch-kalender-link';
+    link.href = '/helpdesk-kalender';
+    link.target = '_blank';
+    link.style.cssText = lastAnchor.style.cssText || '';
+    link.className = lastAnchor.className || '';
+    link.textContent = '📅 Kalender';
+    parent.appendChild(link);
+  }
+
   // ── Route watcher ───────────────────────────────────────────────────────────
 
   var _lastPath = null;
@@ -1217,7 +1451,9 @@
         renderTicketInfoPanel(agentId);
         renderPanel(agentId).then(function () {
           renderItemsPanel(agentId);
+          renderTerminePanel(agentId);
         });
+        injectKalenderSidebarLink();
       }, 1200);
     } else if (custId) {
       _routeTimer = setTimeout(function () { handleCustomerPortal(custId); }, 1000);
