@@ -140,6 +140,8 @@
   var TICKET_INFO_ID = 'ch-ticket-info-panel';
   var ITEMS_PANEL_ID = 'ch-support-items-panel';
   var TERMINE_PANEL_ID = 'ch-termine-panel';
+  var CUSTOMER_TIMES_ID = 'ch-customer-times-panel';
+  var _customerObserver = null;
 
   var TERMIN_COLORS = {
     'Notdienst': '#8B0000',
@@ -212,6 +214,7 @@
   function removePanel() {
     if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
     if (_mutationObserver) { _mutationObserver.disconnect(); _mutationObserver = null; }
+    if (_customerObserver) { _customerObserver.disconnect(); _customerObserver = null; }
     var p = document.getElementById(PANEL_ID);
     if (p) p.remove();
     var info = document.getElementById(TICKET_INFO_ID);
@@ -220,6 +223,8 @@
     if (items) items.remove();
     var termine = document.getElementById(TERMINE_PANEL_ID);
     if (termine) termine.remove();
+    var custTimes = document.getElementById(CUSTOMER_TIMES_ID);
+    if (custTimes) custTimes.remove();
   }
 
   // ── F6 — Ticket Info panel (Project + Support Category) ────────────────────
@@ -1154,6 +1159,7 @@
   // ── Customer portal: closed ticket banner ───────────────────────────────────
 
   function handleCustomerPortal(ticketId) {
+    renderCustomerTimeLogs(ticketId);
     return apiFetch('/api/resource/HD%20Ticket/' + encodeURIComponent(ticketId))
       .then(function (res) {
         var ticket = res.data;
@@ -1188,6 +1194,153 @@
         el.style.pointerEvents = 'none';
       });
     }, 800);
+  }
+
+  // ── Customer Zeiterfassung (read-only) ─────────────────────────────────────
+
+  function watchForCustomerPanelRemoval(ticketId) {
+    if (_customerObserver) _customerObserver.disconnect();
+    _customerObserver = new MutationObserver(function () {
+      if (!document.getElementById(CUSTOMER_TIMES_ID)) {
+        setTimeout(function () { renderCustomerTimeLogs(ticketId); }, 400);
+      }
+    });
+    _customerObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function renderCustomerTimeLogs(ticketId) {
+    Promise.all([getTimeLogs(ticketId), getPriceCategories()]).then(function (results) {
+      var logs = results[0];
+      var priceCats = results[1];
+      var pcMap = {};
+      priceCats.forEach(function (p) { pcMap[p.name] = p; });
+
+      var existing = document.getElementById(CUSTOMER_TIMES_ID);
+      if (existing) existing.remove();
+
+      // Totals
+      var totalH = 0;
+      logs.forEach(function (r) {
+        totalH += (parseFloat(r.effective_duration) || 0) * (parseInt(r.multiplier) || 1);
+      });
+
+      var panel = el('div', 'margin:20px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-family:inherit;font-size:14px;');
+      panel.id = CUSTOMER_TIMES_ID;
+
+      // Header
+      var header = el('div', 'padding:12px 16px;border-bottom:1px solid #d1d5db;display:flex;align-items:center;gap:12px;cursor:pointer;');
+      var headerTitle = el('strong', 'font-size:14px;');
+      headerTitle.textContent = 'Zeiterfassung';
+      var headerStats = el('span', 'font-size:13px;color:#6b7280;');
+      headerStats.textContent = totalH.toFixed(2) + 'h gesamt';
+      var arrow = el('span', 'margin-left:auto;');
+      arrow.textContent = '▼';
+      header.appendChild(headerTitle);
+      header.appendChild(headerStats);
+      header.appendChild(arrow);
+
+      // Body
+      var body = el('div', 'padding:12px 16px;');
+
+      if (logs.length) {
+        var table = el('table', 'width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;');
+        table.innerHTML =
+          '<thead><tr style="border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:12px;">' +
+            '<th style="text-align:left;padding:4px 8px;">Start</th>' +
+            '<th style="text-align:right;padding:4px 8px;">Eff. (h)</th>' +
+            '<th style="text-align:center;padding:4px 8px;">× Mult.</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Preiskategorie</th>' +
+            '<th style="text-align:right;padding:4px 8px;">Gesamt (h)</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Mitarbeiter</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Projekt</th>' +
+            '<th style="padding:4px 8px;">Status</th>' +
+          '</tr></thead><tbody></tbody>';
+
+        var tbody = table.querySelector('tbody');
+
+        logs.forEach(function (row) {
+          var eff = parseFloat(row.effective_duration) || parseFloat(row.duration) || 0;
+          var mult = parseInt(row.multiplier) || 1;
+          var total = eff * mult;
+          var pc = pcMap[row.price_category];
+          var pcLabel = pc ? (pc.time_code + ' – ' + pc.category_name) : (row.price_category || '–');
+
+          var tr = el('tr', 'border-bottom:1px solid #f3f4f6;' + (row.gesperrt || row.is_invoiced ? 'color:#9ca3af;' : ''));
+
+          var statusTd = document.createElement('td');
+          statusTd.style.padding = '4px 8px';
+          if (row.is_invoiced) {
+            statusTd.appendChild(badge('Abgerechnet', '#d1fae5', '#065f46'));
+          } else if (row.gesperrt) {
+            statusTd.appendChild(badge('Gesperrt', '#fee2e2', '#991b1b'));
+          } else {
+            statusTd.appendChild(badge('Offen', '#fef3c7', '#92400e'));
+          }
+
+          tr.innerHTML =
+            '<td style="padding:4px 8px;">' + fmtDT(row.start_time) + '</td>' +
+            '<td style="text-align:right;padding:4px 8px;">' + eff.toFixed(2) + '</td>' +
+            '<td style="text-align:center;padding:4px 8px;">' + mult + '</td>' +
+            '<td style="padding:4px 8px;">' + _escHtml(pcLabel) + '</td>' +
+            '<td style="text-align:right;padding:4px 8px;">' + total.toFixed(2) + '</td>' +
+            '<td style="padding:4px 8px;">' + _escHtml(row.staff_member || '–') + '</td>' +
+            '<td style="padding:4px 8px;">' + _escHtml(row.project || '–') + '</td>';
+          tr.appendChild(statusTd);
+          tbody.appendChild(tr);
+
+          // Description sub-row
+          if (row.description) {
+            var descTr = el('tr', 'background:#f9fafb;');
+            descTr.innerHTML = '<td colspan="8" style="padding:2px 8px 6px 24px;color:#6b7280;font-size:12px;font-style:italic;">' +
+              _escHtml(row.description) + '</td>';
+            tbody.appendChild(descTr);
+          }
+        });
+
+        body.appendChild(table);
+      } else {
+        var empty = el('p', 'color:#9ca3af;font-size:13px;margin-bottom:8px;');
+        empty.textContent = 'Noch keine Zeiteinträge.';
+        body.appendChild(empty);
+      }
+
+      // Collapse toggle
+      var collapsed = false;
+      header.onclick = function () {
+        collapsed = !collapsed;
+        body.style.display = collapsed ? 'none' : 'block';
+        arrow.textContent = collapsed ? '▶' : '▼';
+      };
+
+      panel.appendChild(header);
+      panel.appendChild(body);
+      _insertPanel(panel);
+
+      watchForCustomerPanelRemoval(ticketId);
+
+      // Show a floating scroll-hint button so the customer knows there is a
+      // Zeiterfassung table below the reply area.
+      var existingHint = document.getElementById('ch-times-hint');
+      if (existingHint) existingHint.remove();
+      var hint = document.createElement('div');
+      hint.id = 'ch-times-hint';
+      hint.style.cssText =
+        'position:fixed;bottom:72px;right:16px;background:#3b82f6;color:#fff;' +
+        'padding:8px 14px;border-radius:20px;font-size:13px;font-weight:500;' +
+        'cursor:pointer;z-index:9998;box-shadow:0 2px 10px rgba(0,0,0,0.25);' +
+        'display:flex;align-items:center;gap:6px;';
+      hint.innerHTML = '&#8595; Zeiterfassung';
+      hint.title = 'Klicken, um zur Zeiterfassung zu scrollen';
+      hint.onclick = function () {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        hint.remove();
+      };
+      document.body.appendChild(hint);
+      // Auto-hide after 10 seconds
+      setTimeout(function () { if (hint.parentNode) hint.remove(); }, 10000);
+    }).catch(function (err) {
+      console.error('[custom_helpdesk] Customer times panel error:', err);
+    });
   }
 
   // ── Closing dialog interceptor ──────────────────────────────────────────────
