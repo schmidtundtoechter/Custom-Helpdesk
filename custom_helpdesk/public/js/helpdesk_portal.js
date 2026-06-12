@@ -89,15 +89,16 @@
     });
   }
 
-  var _projectCache = null;
+  var _projectCacheByTicket = {};
 
-  function getProjects() {
-    if (_projectCache) return Promise.resolve(_projectCache);
+  function getProjects(ticketId) {
+    if (_projectCacheByTicket[ticketId]) return Promise.resolve(_projectCacheByTicket[ticketId]);
     return apiMethod(
-      'custom_helpdesk.python_scripts.billing.portal_api.get_projects', {}
+      'custom_helpdesk.python_scripts.billing.portal_api.get_projects',
+      { ticket_name: ticketId || '' }
     ).then(function (res) {
-      _projectCache = res.message || [];
-      return _projectCache;
+      _projectCacheByTicket[ticketId] = res.message || [];
+      return _projectCacheByTicket[ticketId];
     });
   }
 
@@ -293,7 +294,7 @@
   }
 
   function renderPanel(ticketId) {
-    return Promise.all([getTimeLogs(ticketId), getPriceCategories(), getAgents(), getProjects()]).then(function (results) {
+    return Promise.all([getTimeLogs(ticketId), getPriceCategories(), getAgents(), getProjects(ticketId)]).then(function (results) {
       var logs = results[0];
       var priceCats = results[1];
       var agents = results[2];

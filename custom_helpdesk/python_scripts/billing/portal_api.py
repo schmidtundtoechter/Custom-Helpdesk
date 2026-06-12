@@ -227,11 +227,16 @@ def delete_ticket_item(ticket_name, row_name):
 
 
 @frappe.whitelist()
-def get_projects():
-    """Return active projects for the Projekt dropdown in Zeiterfassung panel."""
+def get_projects(ticket_name=None):
+    """Return active projects for the Projekt dropdown, filtered by ticket's customer."""
+    filters = {"status": ["not in", ["Completed", "Cancelled"]]}
+    if ticket_name:
+        customer = frappe.db.get_value("HD Ticket", ticket_name, "customer")
+        if customer:
+            filters["customer"] = customer
     return frappe.get_all(
         "Project",
-        filters={"status": ["not in", ["Completed", "Cancelled"]]},
+        filters=filters,
         fields=["name", "project_name"],
         order_by="project_name asc",
         limit=200,
