@@ -1249,7 +1249,6 @@
           '<thead><tr style="border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:12px;">' +
             '<th style="text-align:left;padding:4px 8px;">Start</th>' +
             '<th style="text-align:right;padding:4px 8px;">Eff. (h)</th>' +
-            '<th style="text-align:center;padding:4px 8px;">× Mult.</th>' +
             '<th style="text-align:left;padding:4px 8px;">Preiskategorie</th>' +
             '<th style="text-align:right;padding:4px 8px;">Gesamt (h)</th>' +
             '<th style="text-align:left;padding:4px 8px;">Mitarbeiter</th>' +
@@ -1281,7 +1280,6 @@
           tr.innerHTML =
             '<td style="padding:4px 8px;">' + fmtDT(row.start_time) + '</td>' +
             '<td style="text-align:right;padding:4px 8px;">' + eff.toFixed(2) + '</td>' +
-            '<td style="text-align:center;padding:4px 8px;">' + mult + '</td>' +
             '<td style="padding:4px 8px;">' + _escHtml(pcLabel) + '</td>' +
             '<td style="text-align:right;padding:4px 8px;">' + total.toFixed(2) + '</td>' +
             '<td style="padding:4px 8px;">' + _escHtml(row.staff_member || '–') + '</td>' +
@@ -1292,7 +1290,7 @@
           // Description sub-row
           if (row.description) {
             var descTr = el('tr', 'background:#f9fafb;');
-            descTr.innerHTML = '<td colspan="8" style="padding:2px 8px 6px 24px;color:#6b7280;font-size:12px;font-style:italic;">' +
+            descTr.innerHTML = '<td colspan="7" style="padding:2px 8px 6px 24px;color:#6b7280;font-size:12px;font-style:italic;">' +
               _escHtml(row.description) + '</td>';
             tbody.appendChild(descTr);
           }
