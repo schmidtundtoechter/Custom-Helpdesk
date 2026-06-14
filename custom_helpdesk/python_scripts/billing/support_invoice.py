@@ -45,9 +45,9 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
         "Timesheet Detail",
         filters=detail_filters,
         fields=[
-            "name", "parent", "from_time",
+            "name", "parent", "from_time", "to_time",
             "billing_hours", "hours", "billing_rate", "billing_amount",
-            "activity_type", "project", "custom_rabatt",
+            "activity_type", "project", "custom_rabatt", "description",
         ],
         order_by="from_time asc",
     )
@@ -98,12 +98,15 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
             "timesheet": d.parent,
             "timesheet_detail": d.name,
             "date": str(detail_date or ""),
+            "from_time": str(d.from_time or ""),
+            "to_time": str(d.to_time or ""),
             "project": d.project or "",
             "category_name": act_type_cache[cache_key],
             "hours": flt(d.billing_hours or d.hours, 4),
             "rate": flt(d.billing_rate, 2),
             "amount": flt(d.billing_amount, 2),  # already includes discount
-            "rabatt": cint(d.custom_rabatt or 0),  # informational only
+            "rabatt": cint(d.custom_rabatt or 0),
+            "description": d.description or "",
         })
 
     customer_rabatt = cint(
