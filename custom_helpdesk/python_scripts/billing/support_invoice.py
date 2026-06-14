@@ -239,11 +239,21 @@ def _update_invoiced_state(doc, invoiced):
             pluck="name",
         )
         for row_name in stl_rows:
-            frappe.db.set_value(
-                "Support Time Log", row_name,
-                "is_invoiced", flag,
-                update_modified=False,
-            )
+            if invoiced:
+                frappe.db.set_value(
+                    "Support Time Log", row_name,
+                    {"is_invoiced": 1, "gesperrt": 1},
+                    update_modified=False,
+                )
+            else:
+                rueck = frappe.db.get_value(
+                    "Support Time Log", row_name, "ruecksprache_erforderlich"
+                )
+                frappe.db.set_value(
+                    "Support Time Log", row_name,
+                    {"is_invoiced": 0, "gesperrt": 0 if rueck else 1},
+                    update_modified=False,
+                )
         tsi_rows = frappe.get_all(
             "Timesheet Support Item",
             filters={"parent": ts_name},
