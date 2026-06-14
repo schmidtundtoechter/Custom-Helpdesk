@@ -248,7 +248,7 @@ def get_closed_statuses():
     """Return label_agent list of HD Ticket Status records with category='Closed'."""
     return frappe.get_all(
         "HD Ticket Status",
-        filters={"category": "Closed", "enabled": 1},
+        filters={"category": ["in", ["Closed", "Resolved"]], "enabled": 1},
         pluck="label_agent",
     )
 

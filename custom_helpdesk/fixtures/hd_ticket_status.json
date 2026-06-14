@@ -43,5 +43,14 @@
     "order": 50,
     "color": "Gray",
     "category": "Closed"
+  },
+  {
+    "doctype": "HD Ticket Status",
+    "name": "Closed",
+    "enabled": 0,
+    "label_agent": "Closed",
+    "order": 99,
+    "color": "Gray",
+    "category": "Resolved"
   }
 ]
