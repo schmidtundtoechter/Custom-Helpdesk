@@ -126,6 +126,7 @@ def _create_timesheet(ticket, rows, customer_name):
                 "item_name": item_row.item_name or "",
                 "qty": item_row.qty or 1,
                 "uom": item_row.uom or "",
+                "project": ticket.get("project") or "",
             })
 
     ts.flags.ignore_links = True

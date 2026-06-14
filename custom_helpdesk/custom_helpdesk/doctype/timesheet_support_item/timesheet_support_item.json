@@ -9,6 +9,7 @@
   "item_name",
   "qty",
   "uom",
+  "project",
   "already_imported"
  ],
  "fields": [
@@ -40,6 +41,13 @@
    "in_list_view": 1,
    "label": "Einheit",
    "options": "UOM"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Projekt",
+   "options": "Project"
   },
   {
    "default": "0",

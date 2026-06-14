@@ -184,10 +184,15 @@ def import_support_invoice_candidates(
 
     article_items = []
     for ts_name in timesheet_names:
+        item_filters = {"parent": ts_name, "already_imported": 0}
+        if project:
+            item_filters["project"] = project
+        else:
+            item_filters["project"] = ["in", ["", None]]
         ts_items = frappe.get_all(
             "Timesheet Support Item",
-            filters={"parent": ts_name, "already_imported": 0},
-            fields=["item_code", "item_name", "qty", "uom"],
+            filters=item_filters,
+            fields=["item_code", "item_name", "qty", "uom", "project"],
         )
         article_items.extend(ts_items)
 
