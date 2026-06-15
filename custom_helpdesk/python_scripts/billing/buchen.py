@@ -114,6 +114,7 @@ def _create_timesheet(ticket, rows, customer_name):
             "billing_rate": price_per_hour,
             "billing_amount": billing_amount,
             "custom_rabatt": rabatt,
+            "custom_hd_agent": row.staff_member or "",
             "is_billable": 1,
             "project": row.get("project") or ticket.get("project") or "",
             "description": _build_description(ticket.name, row),

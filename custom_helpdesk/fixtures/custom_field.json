@@ -200,6 +200,19 @@
   },
   {
     "doctype": "Custom Field",
+    "dt": "Timesheet Detail",
+    "fieldname": "custom_hd_agent",
+    "fieldtype": "Link",
+    "options": "HD Agent",
+    "label": "HD Agent",
+    "description": "Agent who performed this work entry – filled automatically from Support Time Log",
+    "insert_after": "custom_rabatt",
+    "in_list_view": 1,
+    "print_hide": 0,
+    "name": "Timesheet Detail-custom_hd_agent"
+  },
+  {
+    "doctype": "Custom Field",
     "dt": "HD Ticket",
     "fieldname": "support_items_section",
     "fieldtype": "Section Break",
