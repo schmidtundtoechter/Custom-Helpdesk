@@ -38,8 +38,6 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
     detail_filters = {"parent": ["in", ts_names], "is_billable": 1}
     if project:
         detail_filters["project"] = project
-    else:
-        detail_filters["project"] = ["in", ["", None]]
 
     details = frappe.get_all(
         "Timesheet Detail",
@@ -187,8 +185,6 @@ def import_support_invoice_candidates(
         item_filters = {"parent": ts_name, "already_imported": 0}
         if project:
             item_filters["project"] = project
-        else:
-            item_filters["project"] = ["in", ["", None]]
         ts_items = frappe.get_all(
             "Timesheet Support Item",
             filters=item_filters,
