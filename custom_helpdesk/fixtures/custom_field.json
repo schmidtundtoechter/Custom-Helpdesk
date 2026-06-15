@@ -321,16 +321,4 @@
     "print_hide": 0,
     "name": "Sales Invoice Timesheet-custom_rabatt"
   },
-  {
-    "doctype": "Custom Field",
-    "dt": "Sales Invoice Timesheet",
-    "fieldname": "custom_description",
-    "fieldtype": "Small Text",
-    "label": "Beschreibung",
-    "description": "Arbeitsbeschreibung aus dem Support-Zeiteintrag",
-    "insert_after": "custom_rabatt",
-    "allow_on_submit": 1,
-    "print_hide": 0,
-    "name": "Sales Invoice Timesheet-custom_description"
-  }
 ]
