@@ -149,10 +149,11 @@ def import_support_invoice_candidates(
     for cat_name, total_amount in category_totals.items():
         # Items are manually pre-created with item_name = price category name
         item_code = frappe.db.get_value("Item", {"item_name": cat_name}, "name") or cat_name
+        item_description = frappe.db.get_value("Item", item_code, "description") or cat_name
         items.append({
             "item_code": item_code,
             "item_name": cat_name,
-            "description": cat_name,
+            "description": item_description,
             "qty": 1,
             "rate": flt(total_amount, 2),
             "amount": flt(total_amount, 2),
@@ -171,10 +172,14 @@ def import_support_invoice_candidates(
                 frappe.db.get_value("Item", {"item_name": "Supportkontingent"}, "name")
                 or "Supportkontingent"
             )
+            quota_description = (
+                frappe.db.get_value("Item", quota_item_code, "description")
+                or "Monatliches Dienstleistungskontingent"
+            )
             items.append({
                 "item_code": quota_item_code,
                 "item_name": "Supportkontingent",
-                "description": "Monatliches Dienstleistungskontingent",
+                "description": quota_description,
                 "qty": 1,
                 "rate": -flt(applied, 2),
                 "amount": -flt(applied, 2),
@@ -190,6 +195,12 @@ def import_support_invoice_candidates(
             filters=item_filters,
             fields=["item_code", "item_name", "qty", "uom", "project"],
         )
+        for ts_item in ts_items:
+            ts_item["description"] = (
+                frappe.db.get_value("Item", ts_item["item_code"], "description")
+                or ts_item.get("item_name")
+                or ts_item["item_code"]
+            )
         article_items.extend(ts_items)
 
     return {
