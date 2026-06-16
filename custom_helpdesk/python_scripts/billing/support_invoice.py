@@ -113,9 +113,21 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
     return {"rows": rows, "customer_rabatt": customer_rabatt}
 
 
+def _get_item_defaults(item_code, company):
+    uom = frappe.db.get_value("Item", item_code, "stock_uom") or ""
+    income_account = ""
+    if company:
+        income_account = frappe.db.get_value(
+            "Item Default",
+            {"parent": item_code, "company": company},
+            "income_account",
+        ) or ""
+    return uom, income_account
+
+
 @frappe.whitelist()
 def import_support_invoice_candidates(
-    customer, from_date, to_date, project=None, take_service_quota=0, selected_rows=None
+    customer, from_date, to_date, project=None, take_service_quota=0, selected_rows=None, company=None
 ):
     """
     Aggregate selected Timesheet rows into Sales Invoice line items.
@@ -150,6 +162,7 @@ def import_support_invoice_candidates(
         # Items are manually pre-created with item_name = price category name
         item_code = frappe.db.get_value("Item", {"item_name": cat_name}, "name") or cat_name
         item_description = frappe.db.get_value("Item", item_code, "description") or cat_name
+        uom, income_account = _get_item_defaults(item_code, company)
         items.append({
             "item_code": item_code,
             "item_name": cat_name,
@@ -157,6 +170,8 @@ def import_support_invoice_candidates(
             "qty": 1,
             "rate": flt(total_amount, 2),
             "amount": flt(total_amount, 2),
+            "uom": uom,
+            "income_account": income_account,
         })
         total_support_amount += total_amount
 
@@ -176,6 +191,7 @@ def import_support_invoice_candidates(
                 frappe.db.get_value("Item", quota_item_code, "description")
                 or "Monatliches Dienstleistungskontingent"
             )
+            quota_uom, quota_income_account = _get_item_defaults(quota_item_code, company)
             items.append({
                 "item_code": quota_item_code,
                 "item_name": "Supportkontingent",
@@ -183,6 +199,8 @@ def import_support_invoice_candidates(
                 "qty": 1,
                 "rate": -flt(applied, 2),
                 "amount": -flt(applied, 2),
+                "uom": quota_uom,
+                "income_account": quota_income_account,
             })
 
     article_items = []
@@ -201,6 +219,10 @@ def import_support_invoice_candidates(
                 or ts_item.get("item_name")
                 or ts_item["item_code"]
             )
+            fallback_uom, income_account = _get_item_defaults(ts_item["item_code"], company)
+            if not ts_item.get("uom"):
+                ts_item["uom"] = fallback_uom
+            ts_item["income_account"] = income_account
         article_items.extend(ts_items)
 
     return {
