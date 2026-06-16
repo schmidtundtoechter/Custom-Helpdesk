@@ -46,6 +46,7 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
             "name", "parent", "from_time", "to_time",
             "billing_hours", "hours", "billing_rate", "billing_amount",
             "activity_type", "project", "custom_rabatt", "description",
+            "custom_hd_agent",
         ],
         order_by="from_time asc",
     )
@@ -92,6 +93,11 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
                 )
             act_type_cache[cache_key] = pc_name or act_type or "Support"
 
+        agent_id = d.custom_hd_agent or ""
+        agent_name = (
+            frappe.db.get_value("HD Agent", agent_id, "agent_name") if agent_id else ""
+        ) or agent_id
+
         rows.append({
             "timesheet": d.parent,
             "timesheet_detail": d.name,
@@ -105,6 +111,7 @@ def get_support_invoice_candidates(customer, from_date, to_date, project=None, t
             "amount": flt(d.billing_amount, 2),  # already includes discount
             "rabatt": cint(d.custom_rabatt or 0),
             "description": d.description or "",
+            "agent_name": agent_name,
         })
 
     customer_rabatt = cint(

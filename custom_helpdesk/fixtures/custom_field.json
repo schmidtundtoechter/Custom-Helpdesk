@@ -320,5 +320,17 @@
     "in_list_view": 1,
     "print_hide": 0,
     "name": "Sales Invoice Timesheet-custom_rabatt"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "Sales Invoice Timesheet",
+    "fieldname": "custom_hd_agent",
+    "fieldtype": "Data",
+    "label": "HD Agent",
+    "insert_after": "custom_rabatt",
+    "read_only": 1,
+    "in_list_view": 1,
+    "print_hide": 0,
+    "name": "Sales Invoice Timesheet-custom_hd_agent"
   }
 ]
