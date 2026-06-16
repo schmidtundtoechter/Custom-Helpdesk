@@ -11,11 +11,23 @@ from frappe.utils import flt, cint
 
 
 def on_timesheet_validate(doc, method=None):
+    any_corrected = False
     for row in (doc.time_logs or []):
         rabatt = cint(row.get("custom_rabatt") or 0)
         if rabatt <= 0:
             continue
+        any_corrected = True
         base = flt(row.billing_hours or 0) * flt(row.billing_rate or 0)
         discounted = flt(base * (1 - rabatt / 100), 2)
         row.billing_amount = discounted
         row.base_billing_amount = discounted
+
+    if any_corrected:
+        # ERPNext computed total_billable_amount before our hook ran, so it reflects
+        # pre-discount values. Recompute it here so the correct discounted total is
+        # saved to DB and ERPNext's Sales Invoice import reads it correctly.
+        corrected_total = sum(
+            flt(r.billing_amount) for r in (doc.time_logs or []) if r.is_billable
+        )
+        doc.total_billable_amount = corrected_total
+        doc.base_total_billable_amount = corrected_total
