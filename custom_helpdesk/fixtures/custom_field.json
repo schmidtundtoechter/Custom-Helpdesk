@@ -272,11 +272,21 @@
   {
     "doctype": "Custom Field",
     "dt": "HD Ticket",
+    "fieldname": "fahrten_abgerechnet",
+    "fieldtype": "Check",
+    "label": "Fahrten abgerechnet",
+    "default": "0",
+    "insert_after": "kunde_benachrichtigt",
+    "name": "HD Ticket-fahrten_abgerechnet"
+  },
+  {
+    "doctype": "Custom Field",
+    "dt": "HD Ticket",
     "fieldname": "klassifizierung",
     "fieldtype": "Link",
     "options": "HD Klassifizierung",
     "label": "Klassifizierung",
-    "insert_after": "kunde_benachrichtigt",
+    "insert_after": "fahrten_abgerechnet",
     "name": "HD Ticket-klassifizierung"
   },
   {

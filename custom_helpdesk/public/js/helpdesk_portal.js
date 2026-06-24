@@ -1492,8 +1492,10 @@
 
     var c1 = makeCheckbox('ch-close-cb1', 'Zeiteinträge sind vollständig erfasst');
     var c2 = makeCheckbox('ch-close-cb2', 'Kunde wurde benachrichtigt');
+    var c3 = makeCheckbox('ch-close-cb3', 'Fahrten abgerechnet');
     dialog.appendChild(c1.wrap);
     dialog.appendChild(c2.wrap);
+    dialog.appendChild(c3.wrap);
 
     // ── Klassifizierung ──
     dialog.appendChild(sep('Klassifizierung'));
@@ -1571,7 +1573,7 @@
     confirmBtn.disabled = true;
 
     function updateConfirm() {
-      var ok = c1.cb.checked && c2.cb.checked && klassiSel.value !== '' && statusSel.value !== '';
+      var ok = c1.cb.checked && c2.cb.checked && c3.cb.checked && klassiSel.value !== '' && statusSel.value !== '';
       confirmBtn.disabled = !ok;
       confirmBtn.style.opacity = ok ? '1' : '0.4';
       confirmBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -1579,6 +1581,7 @@
 
     c1.cb.addEventListener('change', updateConfirm);
     c2.cb.addEventListener('change', updateConfirm);
+    c3.cb.addEventListener('change', updateConfirm);
     klassiSel.addEventListener('change', updateConfirm);
     statusSel.addEventListener('change', updateConfirm);
 
@@ -1592,6 +1595,7 @@
       var formData = {
         zeiteintraege_vollstaendig: c1.cb.checked ? 1 : 0,
         kunde_benachrichtigt: c2.cb.checked ? 1 : 0,
+        fahrten_abgerechnet: c3.cb.checked ? 1 : 0,
         klassifizierung: klassiSel.value,
         schliessungsstatus: statusSel.value,
         schliessungs_kommentar: komTA.value,

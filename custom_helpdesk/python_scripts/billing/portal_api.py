@@ -258,7 +258,7 @@ def save_closing_details(ticket_name, data):
     """Save closing dialog fields to an HD Ticket."""
     frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
     allowed = {
-        "zeiteintraege_vollstaendig", "kunde_benachrichtigt",
+        "zeiteintraege_vollstaendig", "kunde_benachrichtigt", "fahrten_abgerechnet",
         "klassifizierung", "schliessungsstatus",
         "schliessungs_kommentar", "schliessungs_kommentar_intern",
     }
