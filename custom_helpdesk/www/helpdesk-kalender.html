@@ -43,6 +43,37 @@
     .ch-legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #374151; }
     .ch-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 
+    /* Filter bar */
+    .ch-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      flex-wrap: wrap;
+    }
+    .ch-filter-bar label { font-size: 13px; color: #374151; font-weight: 500; }
+    .ch-filter-bar select {
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+      cursor: pointer;
+    }
+    .ch-mine-btn {
+      padding: 5px 12px;
+      border: 1px solid #6366f1;
+      background: #fff;
+      color: #6366f1;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .ch-mine-btn:hover, .ch-mine-btn.active { background: #6366f1; color: #fff; }
+
     #ch-cal-wrap { padding: 20px 24px; }
     #ch-calendar { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 
@@ -64,13 +95,24 @@
       padding: 8px 10px; font-size: 14px; font-family: inherit;
     }
     .ch-field textarea { resize: vertical; min-height: 60px; }
+    .ch-ticket-row { display: flex; gap: 8px; align-items: center; }
+    .ch-ticket-row input { flex: 1; }
+    .ch-open-link {
+      white-space: nowrap; font-size: 13px; color: #6366f1;
+      text-decoration: none; padding: 8px 10px; border: 1px solid #d1d5db;
+      border-radius: 6px; background: #fff;
+    }
+    .ch-open-link:hover { background: #f0f0ff; }
     .ch-btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f3f4f6; }
     .ch-btn-cancel { padding: 6px 14px; border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 6px; cursor: pointer; font-size: 13px; }
     .ch-btn-save { padding: 6px 14px; border: none; background: #6366f1; color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; }
     .ch-btn-save:hover { background: #4f46e5; }
     .ch-btn-del { padding: 6px 14px; border: 1px solid #ef4444; background: #fff; color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 13px; }
   </style>
-  <script>var __csrf_token = "{{ csrf_token }}";</script>
+  <script>
+    var __csrf_token = "{{ csrf_token }}";
+    var __current_user = "{{ current_user }}";
+  </script>
 </head>
 <body>
 
@@ -88,6 +130,15 @@
   <div class="ch-legend-item"><div class="ch-dot" style="background:#1565C0"></div>Remote-Inhouse</div>
 </div>
 
+<!-- 2.1 Filter bar -->
+<div class="ch-filter-bar">
+  <label>Filtern nach:</label>
+  <select id="ch-agent-filter">
+    <option value="">Alle anzeigen</option>
+  </select>
+  <button class="ch-mine-btn" id="ch-mine-btn">Nur meine</button>
+</div>
+
 <div id="ch-cal-wrap">
   <div id="ch-calendar"></div>
 </div>
@@ -96,9 +147,10 @@
 <script>
 (function () {
   var calendar;
+  var activeFilter = '';  // empty = show all
+  var agentList = [];     // [{user, agent_name}, ...]
 
   function getCsrfToken() {
-    // Prefer server-injected token; fall back to frappe global if available
     if (__csrf_token && __csrf_token !== 'None') return __csrf_token;
     if (window.frappe && window.frappe.csrf_token) return window.frappe.csrf_token;
     return '';
@@ -116,9 +168,25 @@
     }).then(function (r) { return r.json(); });
   }
 
+  // 2.1 load agents for filter dropdown
+  function loadAgentsForFilter() {
+    api('custom_helpdesk.python_scripts.billing.portal_api.get_agents', {})
+      .then(function (res) {
+        agentList = res.message || [];
+        var sel = document.getElementById('ch-agent-filter');
+        agentList.forEach(function (a) {
+          var o = document.createElement('option');
+          o.value = a.user;
+          o.textContent = a.agent_name || a.user;
+          sel.appendChild(o);
+        });
+      });
+  }
+
   function loadEvents(fetchInfo, successCb, failCb) {
-    // GET request — no CSRF token required for read-only endpoints
-    fetch('/api/method/custom_helpdesk.python_scripts.termine.termine_api.get_all_termine', {
+    var url = '/api/method/custom_helpdesk.python_scripts.termine.termine_api.get_all_termine';
+    var qs = activeFilter ? '?assigned_to=' + encodeURIComponent(activeFilter) : '';
+    fetch(url + qs, {
       method: 'GET',
       credentials: 'include',
       headers: { 'Accept': 'application/json' },
@@ -140,16 +208,39 @@
       .catch(failCb);
   }
 
-  // Script is at end of body — DOM is ready, no need for DOMContentLoaded.
-  // Initialize directly to avoid potential double-fire when CDN script loads asynchronously.
   (function initCalendar() {
+    loadAgentsForFilter();
+
+    // Filter dropdown change
+    var filterSel = document.getElementById('ch-agent-filter');
+    filterSel.addEventListener('change', function () {
+      activeFilter = filterSel.value;
+      var mineBtn = document.getElementById('ch-mine-btn');
+      mineBtn.classList.toggle('active', activeFilter === __current_user);
+      if (calendar) calendar.refetchEvents();
+    });
+
+    // "Nur meine" button
+    var mineBtn = document.getElementById('ch-mine-btn');
+    mineBtn.addEventListener('click', function () {
+      if (activeFilter === __current_user) {
+        activeFilter = '';
+        filterSel.value = '';
+        mineBtn.classList.remove('active');
+      } else {
+        activeFilter = __current_user;
+        filterSel.value = __current_user;
+        mineBtn.classList.add('active');
+      }
+      if (calendar) calendar.refetchEvents();
+    });
+
     var newBtn = document.getElementById('ch-top-new-btn');
     if (newBtn) newBtn.addEventListener('click', function () { openNewForm(); });
 
     var calEl = document.getElementById('ch-calendar');
     if (!calEl) return;
 
-    // Destroy any prior instance to prevent doubling on hot-reload or re-entry
     if (calEl._fcInstance) {
       calEl._fcInstance.destroy();
       calEl._fcInstance = null;
@@ -237,19 +328,64 @@
     descTA.placeholder = 'Beschreibung …';
     modal.appendChild(field('Beschreibung', descTA));
 
-    // Assigned to
-    var assignedInput = document.createElement('input');
-    assignedInput.type = 'text';
-    assignedInput.value = data.assigned_to || '';
-    assignedInput.placeholder = 'user@example.com';
-    modal.appendChild(field('Zugewiesen an (E-Mail)', assignedInput));
+    // 2.3 Zugewiesen an — smart agent select
+    var assignedSel = document.createElement('select');
+    var emptyOpt = document.createElement('option');
+    emptyOpt.value = ''; emptyOpt.textContent = '– Mitarbeiter wählen –';
+    assignedSel.appendChild(emptyOpt);
+    // populate with already-loaded agents; also reload if empty
+    function populateAgentSelect() {
+      var current = data.assigned_to || '';
+      agentList.forEach(function (a) {
+        var o = document.createElement('option');
+        o.value = a.user;
+        o.textContent = a.agent_name || a.user;
+        if (a.user === current) o.selected = true;
+        assignedSel.appendChild(o);
+      });
+    }
+    if (agentList.length) {
+      populateAgentSelect();
+    } else {
+      api('custom_helpdesk.python_scripts.billing.portal_api.get_agents', {})
+        .then(function (res) {
+          agentList = res.message || [];
+          populateAgentSelect();
+        });
+    }
+    modal.appendChild(field('Zugewiesen an', assignedSel));
 
-    // Ticket
+    // 2.4 Ticket-Link with clickable "Öffnen" button
+    var ticketRow = document.createElement('div');
+    ticketRow.className = 'ch-ticket-row';
     var ticketInput = document.createElement('input');
     ticketInput.type = 'text';
     ticketInput.value = data.ticket || '';
     ticketInput.placeholder = 'HD-00001';
-    modal.appendChild(field('Ticket-Link', ticketInput));
+    ticketRow.appendChild(ticketInput);
+    var openLink = document.createElement('a');
+    openLink.className = 'ch-open-link';
+    openLink.textContent = 'Öffnen ↗';
+    openLink.target = '_blank';
+    function updateOpenLink() {
+      var val = ticketInput.value.trim();
+      if (val) {
+        openLink.href = '/helpdesk/tickets/' + encodeURIComponent(val);
+        openLink.style.display = '';
+      } else {
+        openLink.style.display = 'none';
+      }
+    }
+    ticketInput.addEventListener('input', updateOpenLink);
+    updateOpenLink();
+    ticketRow.appendChild(openLink);
+    var ticketFieldWrap = document.createElement('div');
+    ticketFieldWrap.className = 'ch-field';
+    var ticketLbl = document.createElement('label');
+    ticketLbl.textContent = 'Ticket-Link';
+    ticketFieldWrap.appendChild(ticketLbl);
+    ticketFieldWrap.appendChild(ticketRow);
+    modal.appendChild(ticketFieldWrap);
 
     // Buttons
     var btnRow = document.createElement('div');
@@ -290,7 +426,7 @@
         from_time: fromInput.value.replace('T', ' ') + ':00',
         to_time: toInput.value.replace('T', ' ') + ':00',
         description: descTA.value,
-        assigned_to: assignedInput.value.trim(),
+        assigned_to: assignedSel.value,
         ticket: ticketInput.value.trim(),
       };
 
@@ -298,16 +434,34 @@
       saveBtn.textContent = '…';
 
       if (terminName) {
-        // Update existing: delete + recreate (simpler than a PUT)
-        api('custom_helpdesk.python_scripts.termine.termine_api.delete_termin', { termin_name: terminName })
-          .then(function () {
-            return api('custom_helpdesk.python_scripts.termine.termine_api.add_termin', { data: JSON.stringify(payload) });
+        // 2.5 Proper update via update_termin instead of delete+recreate
+        api('custom_helpdesk.python_scripts.termine.termine_api.update_termin', {
+          termin_name: terminName,
+          data: JSON.stringify(payload),
+        })
+          .then(function (res) {
+            if (res.exc) {
+              console.error(res.exc);
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Speichern';
+              return;
+            }
+            overlay.remove();
+            calendar.refetchEvents();
           })
-          .then(function () { overlay.remove(); calendar.refetchEvents(); })
           .catch(function (e) { console.error(e); saveBtn.disabled = false; saveBtn.textContent = 'Speichern'; });
       } else {
         api('custom_helpdesk.python_scripts.termine.termine_api.add_termin', { data: JSON.stringify(payload) })
-          .then(function () { overlay.remove(); calendar.refetchEvents(); })
+          .then(function (res) {
+            if (res.exc) {
+              console.error(res.exc);
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Erstellen';
+              return;
+            }
+            overlay.remove();
+            calendar.refetchEvents();
+          })
           .catch(function (e) { console.error(e); saveBtn.disabled = false; saveBtn.textContent = 'Erstellen'; });
       }
     };

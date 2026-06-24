@@ -46,10 +46,25 @@ def delete_termin(termin_name):
 
 
 @frappe.whitelist()
-def get_all_termine():
-    """Return all HD Termin records for the calendar view."""
+def update_termin(termin_name, data):
+    d = json.loads(data) if isinstance(data, str) else data
+    termin = frappe.get_doc("HD Termin", termin_name)
+    for field in ("type", "description", "ticket", "from_time", "to_time", "assigned_to"):
+        if field in d:
+            setattr(termin, field, d[field])
+    termin.save(ignore_permissions=True)
+    return termin.as_dict()
+
+
+@frappe.whitelist()
+def get_all_termine(assigned_to=None):
+    """Return all HD Termin records for the calendar view, optionally filtered by assigned_to."""
+    filters = {}
+    if assigned_to:
+        filters["assigned_to"] = assigned_to
     return frappe.get_all(
         "HD Termin",
+        filters=filters,
         fields=["name", "type", "color", "description", "ticket", "from_time", "to_time", "assigned_to"],
         order_by="from_time asc",
         limit=2000,

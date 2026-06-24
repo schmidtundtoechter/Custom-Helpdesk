@@ -1016,6 +1016,18 @@
             row.appendChild(assignSpan);
           }
 
+          var editRowBtn = el('button',
+            'border:1px solid #6366f1;background:#fff;color:#6366f1;border-radius:4px;' +
+            'padding:2px 6px;font-size:11px;cursor:pointer;flex-shrink:0;',
+            {}
+          );
+          editRowBtn.textContent = '✎';
+          editRowBtn.title = 'Termin bearbeiten';
+          (function (termin) {
+            editRowBtn.addEventListener('click', function () { activateEditMode(termin); });
+          })(t);
+          row.appendChild(editRowBtn);
+
           var delBtn = el('button',
             'border:1px solid #ef4444;background:#fff;color:#ef4444;border-radius:4px;' +
             'padding:2px 6px;font-size:11px;cursor:pointer;flex-shrink:0;',
@@ -1043,11 +1055,23 @@
         body.appendChild(emptyP);
       }
 
-      // ── New Termin inline form ──
+      // ── New / Edit Termin inline form ──
+      var editingTerminName = null;
+
       var formWrap = el('div', 'border-top:1px solid #f0f0f0;padding-top:12px;');
-      var formTitle = el('strong', 'font-size:13px;color:#374151;display:block;margin-bottom:8px;');
+
+      var formHeaderRow = el('div', 'display:flex;align-items:center;gap:10px;margin-bottom:8px;');
+      var formTitle = el('strong', 'font-size:13px;color:#374151;');
       formTitle.textContent = '+ Neuer Termin';
-      formWrap.appendChild(formTitle);
+      var cancelEditBtn = el('button',
+        'font-size:11px;border:1px solid #d1d5db;background:#fff;color:#6b7280;' +
+        'border-radius:4px;padding:2px 8px;cursor:pointer;display:none;',
+        {}
+      );
+      cancelEditBtn.textContent = 'Abbrechen';
+      formHeaderRow.appendChild(formTitle);
+      formHeaderRow.appendChild(cancelEditBtn);
+      formWrap.appendChild(formHeaderRow);
 
       var formGrid = el('div', 'display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;');
 
@@ -1080,10 +1104,17 @@
       descInput.placeholder = 'Beschreibung';
       formGrid.appendChild(fld('Beschreibung', descInput));
 
-      var assignedInput = el('input', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;width:160px;');
-      assignedInput.type = 'text';
-      assignedInput.placeholder = 'user@example.com';
-      formGrid.appendChild(fld('Zugewiesen an', assignedInput));
+      // 2.2 Smart agent select instead of free-text email
+      var assignedSel = el('select', 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;width:160px;');
+      var assignedSelEmpty = el('option', ''); assignedSelEmpty.value = ''; assignedSelEmpty.textContent = '– Mitarbeiter –';
+      assignedSel.appendChild(assignedSelEmpty);
+      getAgents().then(function (agents) {
+        agents.forEach(function (a) {
+          var o = el('option', ''); o.value = a.user; o.textContent = a.agent_name || a.user;
+          assignedSel.appendChild(o);
+        });
+      });
+      formGrid.appendChild(fld('Zugewiesen an', assignedSel));
 
       var addBtn = btn('Speichern',
         'border:1px solid #6366f1;background:#6366f1;color:#fff;align-self:flex-end;',
@@ -1094,30 +1125,73 @@
 
           addBtn.disabled = true;
           addBtn.textContent = '…';
-          apiMethod(
-            'custom_helpdesk.python_scripts.termine.termine_api.add_termin',
-            {
-              data: JSON.stringify({
-                type: typeSel.value,
-                from_time: fromInput.value.replace('T', ' ') + ':00',
-                to_time: toInput.value.replace('T', ' ') + ':00',
-                description: descInput.value,
-                assigned_to: assignedInput.value.trim(),
-                ticket: ticketId,
-              }),
-            }
-          ).then(function (res) {
-            if (res.message) {
+
+          var payload = {
+            type: typeSel.value,
+            from_time: fromInput.value.replace('T', ' ') + ':00',
+            to_time: toInput.value.replace('T', ' ') + ':00',
+            description: descInput.value,
+            assigned_to: assignedSel.value,
+            ticket: ticketId,
+          };
+
+          if (editingTerminName) {
+            // 2.5 Update existing via proper update_termin endpoint
+            apiMethod(
+              'custom_helpdesk.python_scripts.termine.termine_api.update_termin',
+              { termin_name: editingTerminName, data: JSON.stringify(payload) }
+            ).then(function (res) {
+              if (res.exc) {
+                alert('Fehler beim Speichern.');
+                addBtn.disabled = false;
+                addBtn.textContent = 'Aktualisieren';
+                return;
+              }
               renderTerminePanel(ticketId);
-            } else {
-              alert('Fehler: ' + (res.exception || res._server_messages || 'Unbekannter Fehler'));
-              addBtn.disabled = false;
-              addBtn.textContent = 'Speichern';
-            }
-          });
+            });
+          } else {
+            apiMethod(
+              'custom_helpdesk.python_scripts.termine.termine_api.add_termin',
+              { data: JSON.stringify(payload) }
+            ).then(function (res) {
+              if (res.message) {
+                renderTerminePanel(ticketId);
+              } else {
+                alert('Fehler: ' + (res.exception || res._server_messages || 'Unbekannter Fehler'));
+                addBtn.disabled = false;
+                addBtn.textContent = 'Speichern';
+              }
+            });
+          }
         }
       );
       formGrid.appendChild(addBtn);
+
+      function activateEditMode(termin) {
+        editingTerminName = termin.name;
+        typeSel.value = termin.type || '';
+        fromInput.value = termin.from_time ? String(termin.from_time).slice(0, 16).replace(' ', 'T') : '';
+        toInput.value = termin.to_time ? String(termin.to_time).slice(0, 16).replace(' ', 'T') : '';
+        descInput.value = termin.description || '';
+        assignedSel.value = termin.assigned_to || '';
+        formTitle.textContent = '✎ Termin bearbeiten';
+        cancelEditBtn.style.display = '';
+        addBtn.textContent = 'Aktualisieren';
+        formWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      cancelEditBtn.addEventListener('click', function () {
+        editingTerminName = null;
+        typeSel.value = '';
+        fromInput.value = '';
+        toInput.value = '';
+        descInput.value = '';
+        assignedSel.value = '';
+        formTitle.textContent = '+ Neuer Termin';
+        cancelEditBtn.style.display = 'none';
+        addBtn.textContent = 'Speichern';
+        addBtn.disabled = false;
+      });
 
       formWrap.appendChild(formGrid);
       body.appendChild(formWrap);
