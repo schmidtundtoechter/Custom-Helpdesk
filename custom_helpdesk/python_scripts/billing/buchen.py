@@ -102,23 +102,29 @@ def _create_timesheet(ticket, rows, customer_name):
 
         effective = float(row.effective_duration or 0)
         multiplier = int(row.multiplier or 1)
-        billed_hours = effective * multiplier
-        billing_amount = flt(billed_hours * price_per_hour * (1 - rabatt / 100), 2)
+        billing_amount_per = flt(effective * price_per_hour * (1 - rabatt / 100), 2)
+        desc = _build_description(ticket.name, row)
+        project = row.get("project") or ticket.get("project") or ""
+        activity = time_code or "Support"
 
-        ts.append("time_logs", {
-            "activity_type": time_code or "Support",
-            "from_time": row.start_time,
-            "to_time": row.end_time,
-            "hours": billed_hours,
-            "billing_hours": billed_hours,
-            "billing_rate": price_per_hour,
-            "billing_amount": billing_amount,
-            "custom_rabatt": rabatt,
-            "custom_hd_agent": row.staff_member or "",
-            "is_billable": 1,
-            "project": row.get("project") or ticket.get("project") or "",
-            "description": _build_description(ticket.name, row),
-        })
+        # Create one Timesheet Detail line per person (multiplier copies).
+        # First copy keeps the HD Agent; subsequent copies are left empty so
+        # each attendee can be assigned individually for per-agent billing analysis.
+        for i in range(multiplier):
+            ts.append("time_logs", {
+                "activity_type": activity,
+                "from_time": row.start_time,
+                "to_time": row.end_time,
+                "hours": effective,
+                "billing_hours": effective,
+                "billing_rate": price_per_hour,
+                "billing_amount": billing_amount_per,
+                "custom_rabatt": rabatt,
+                "custom_hd_agent": row.staff_member or "" if i == 0 else "",
+                "is_billable": 1,
+                "project": project,
+                "description": desc,
+            })
 
     for item_row in (ticket.get("support_items") or []):
         if not item_row.is_submitted:

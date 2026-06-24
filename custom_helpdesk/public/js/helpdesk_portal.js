@@ -421,7 +421,7 @@
                 p.time_code + ' – ' + p.category_name + '</option>';
             }).join('');
 
-            var multOptions = [1, 2, 3, 4, 5].map(function (v) {
+            var multOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(function (v) {
               return '<option value="' + v + '"' + (v === mult ? ' selected' : '') + '>' + v + '</option>';
             }).join('');
 
