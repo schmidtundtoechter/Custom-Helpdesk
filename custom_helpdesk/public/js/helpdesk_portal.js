@@ -608,12 +608,18 @@
             var descTrE = el('tr', 'background:#fafafa;border-bottom:1px solid #f0f0f0;');
             var descTd = el('td', 'padding:2px 8px 6px 36px;');
             descTd.setAttribute('colspan', '11');
-            var descInput = document.createElement('input');
-            descInput.type = 'text';
-            descInput.style.cssText = 'width:100%;border:1px solid #e5e7eb;border-radius:3px;padding:3px 6px;font-size:12px;box-sizing:border-box;';
+            var descInput = document.createElement('textarea');
+            descInput.rows = 1;
+            descInput.style.cssText = 'width:100%;border:1px solid #e5e7eb;border-radius:3px;padding:3px 6px;font-size:12px;box-sizing:border-box;resize:none;overflow:hidden;line-height:1.4;font-family:inherit;';
             descInput.placeholder = 'Beschreibung (was wurde gemacht?)';
             descInput.value = row.description || '';
             descInput.dataset.row = row.name;
+            descInput.addEventListener('input', function () {
+              this.style.height = 'auto';
+              this.style.height = this.scrollHeight + 'px';
+            });
+            descInput.style.height = 'auto';
+            descInput.style.height = (descInput.scrollHeight || 24) + 'px';
             descInput.addEventListener('change', function () {
               apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
                 ticket_name: ticketId,
