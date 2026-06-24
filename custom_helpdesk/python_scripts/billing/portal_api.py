@@ -112,7 +112,7 @@ def update_time_log(ticket_name, row_name, data):
     allowed = {
         "multiplier", "price_category", "manual_override", "staff_member",
         "ruecksprache_erforderlich", "description", "start_time", "end_time",
-        "project",
+        "project", "task",
     }
     updates = {k: v for k, v in json.loads(data).items() if k in allowed}
     if not updates:
@@ -239,6 +239,18 @@ def get_projects(ticket_name=None):
         filters=filters,
         fields=["name", "project_name"],
         order_by="project_name asc",
+        limit=200,
+    )
+
+
+@frappe.whitelist()
+def get_project_tasks(project):
+    """Return open Tasks for a given project."""
+    return frappe.get_all(
+        "Task",
+        filters={"project": project, "status": ["not in", ["Cancelled", "Template"]]},
+        fields=["name", "subject"],
+        order_by="subject asc",
         limit=200,
     )
 

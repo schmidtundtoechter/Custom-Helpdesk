@@ -123,6 +123,7 @@ def _create_timesheet(ticket, rows, customer_name):
                 "custom_hd_agent": row.staff_member or "" if i == 0 else "",
                 "is_billable": 1,
                 "project": project,
+                "task": row.get("task") or "",
                 "description": desc,
             })
 

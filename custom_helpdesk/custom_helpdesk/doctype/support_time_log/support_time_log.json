@@ -15,6 +15,7 @@
   "col_break_1",
   "staff_member",
   "project",
+  "task",
   "entered_by",
   "multiplier",
   "price_category",
@@ -86,6 +87,12 @@
    "fieldtype": "Link",
    "label": "Project",
    "options": "Project"
+  },
+  {
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "label": "Aufgabe",
+   "options": "Task"
   },
   {
    "fieldname": "entered_by",

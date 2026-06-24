@@ -102,6 +102,19 @@
     });
   }
 
+  var _taskCache = {};
+
+  function getProjectTasks(project) {
+    if (_taskCache[project]) return Promise.resolve(_taskCache[project]);
+    return apiMethod(
+      'custom_helpdesk.python_scripts.billing.portal_api.get_project_tasks',
+      { project: project }
+    ).then(function (res) {
+      _taskCache[project] = res.message || [];
+      return _taskCache[project];
+    });
+  }
+
   // ── Time log data ───────────────────────────────────────────────────────────
 
   function getTimeLogs(ticketName) {
@@ -367,6 +380,7 @@
             '<th style="text-align:right;padding:4px 8px;">Gesamt (h)</th>' +
             '<th style="text-align:left;padding:4px 8px;">Mitarbeiter</th>' +
             '<th style="text-align:left;padding:4px 8px;">Projekt</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Aufgabe</th>' +
             '<th style="text-align:center;padding:4px 8px;">Rücksprache</th>' +
             '<th style="padding:4px 8px;">Status</th>' +
           '</tr></thead><tbody></tbody>';
@@ -404,13 +418,14 @@
               '<td style="text-align:right;padding:4px 8px;">' + total.toFixed(2) + '</td>' +
               '<td style="padding:4px 8px;">' + (row.staff_member || '–') + '</td>' +
               '<td style="padding:4px 8px;color:#374151;font-size:12px;">' + (function() { var p = projects.find(function(x){ return x.name === row.project; }); return _escHtml(p ? p.project_name : (row.project || '–')); })() + '</td>' +
+              '<td style="padding:4px 8px;color:#374151;font-size:12px;">' + _escHtml(row.task || '–') + '</td>' +
               '<td style="text-align:center;padding:4px 8px;color:' + (row.ruecksprache_erforderlich ? '#d97706' : 'inherit') + ';">' + (row.ruecksprache_erforderlich ? '✓' : '') + '</td>';
             tr.appendChild(statusCell);
             tbody.appendChild(tr);
             // F5 — show description below locked row if present
             if (row.description) {
               var descTrL = el('tr', 'background:#f9fafb;');
-              descTrL.innerHTML = '<td colspan="11" style="padding:2px 8px 6px 36px;color:#6b7280;font-size:12px;font-style:italic;">' +
+              descTrL.innerHTML = '<td colspan="12" style="padding:2px 8px 6px 36px;color:#6b7280;font-size:12px;font-style:italic;">' +
                 _escHtml(row.description) + '</td>';
               tbody.appendChild(descTrL);
             }
@@ -486,6 +501,11 @@
                 }).join('') +
                 '</select>' +
               '</td>' +
+              '<td style="padding:4px 8px;">' +
+                '<select class="ch-task" data-row="' + row.name + '" style="border:1px solid #d1d5db;border-radius:3px;padding:2px;max-width:160px;">' +
+                '<option value="">– wählen –</option>' +
+                '</select>' +
+              '</td>' +
               '<td style="text-align:center;padding:4px 8px;">' +
                 '<input type="checkbox" class="ch-rueck" data-row="' + row.name + '"' + (row.ruecksprache_erforderlich ? ' checked' : '') + ' style="cursor:pointer;width:16px;height:16px;">' +
               '</td>';
@@ -541,14 +561,48 @@
               });
             }
 
-            // Project input
+            // Project input — also clears task when project changes
             var projSel = tr.querySelector('.ch-project');
+            var taskSel = tr.querySelector('.ch-task');
             if (projSel) {
               projSel.addEventListener('change', function () {
                 apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
                   ticket_name: ticketId,
                   row_name: projSel.dataset.row,
-                  data: JSON.stringify({ project: projSel.value }),
+                  data: JSON.stringify({ project: projSel.value, task: '' }),
+                });
+                if (taskSel) {
+                  taskSel.innerHTML = '<option value="">– wählen –</option>';
+                  if (projSel.value) {
+                    getProjectTasks(projSel.value).then(function (tasks) {
+                      taskSel.innerHTML = '<option value="">– wählen –</option>' +
+                        tasks.map(function (t) {
+                          return '<option value="' + _escHtml(t.name) + '">' +
+                            _escHtml(t.subject || t.name) + '</option>';
+                        }).join('');
+                    });
+                  }
+                }
+              });
+            }
+
+            // Task select — populated async from selected project
+            if (taskSel) {
+              if (row.project) {
+                getProjectTasks(row.project).then(function (tasks) {
+                  taskSel.innerHTML = '<option value="">– wählen –</option>' +
+                    tasks.map(function (t) {
+                      return '<option value="' + _escHtml(t.name) + '"' +
+                        (t.name === row.task ? ' selected' : '') + '>' +
+                        _escHtml(t.subject || t.name) + '</option>';
+                    }).join('');
+                });
+              }
+              taskSel.addEventListener('change', function () {
+                apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                  ticket_name: ticketId,
+                  row_name: taskSel.dataset.row,
+                  data: JSON.stringify({ task: taskSel.value }),
                 });
               });
             }
@@ -607,7 +661,7 @@
             // F5 — description input sub-row for editable rows
             var descTrE = el('tr', 'background:#fafafa;border-bottom:1px solid #f0f0f0;');
             var descTd = el('td', 'padding:2px 8px 6px 36px;');
-            descTd.setAttribute('colspan', '11');
+            descTd.setAttribute('colspan', '12');
             var descInput = document.createElement('textarea');
             descInput.rows = 1;
             descInput.style.cssText = 'width:100%;border:1px solid #e5e7eb;border-radius:3px;padding:3px 6px;font-size:12px;box-sizing:border-box;resize:none;overflow:hidden;line-height:1.4;font-family:inherit;';
