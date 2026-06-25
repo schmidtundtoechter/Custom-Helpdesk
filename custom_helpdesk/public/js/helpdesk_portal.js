@@ -607,29 +607,51 @@
               });
             }
 
-            // Save on change for multiplier and price category
-            tr.querySelectorAll('.ch-mult, .ch-pc').forEach(function (sel) {
-              sel.addEventListener('change', function () {
-                var rowName = sel.dataset.row;
-                var newMult = parseInt(tr.querySelector('.ch-mult').value) || 1;
-                var newPc = tr.querySelector('.ch-pc').value;
+            // Multiplier: selecting > 1 duplicates the row in HD instead of multiplying
+            var multSel = tr.querySelector('.ch-mult');
+            if (multSel) {
+              multSel.addEventListener('change', function () {
+                var rowName = multSel.dataset.row;
+                var newMult = parseInt(multSel.value) || 1;
+                if (newMult > 1) {
+                  multSel.disabled = true;
+                  apiMethod('custom_helpdesk.python_scripts.billing.portal_api.duplicate_time_log', {
+                    ticket_name: ticketId,
+                    row_name: rowName,
+                    copies: newMult - 1,
+                  }).then(function () { renderBoth(ticketId); });
+                } else {
+                  apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
+                    ticket_name: ticketId,
+                    row_name: rowName,
+                    data: JSON.stringify({ multiplier: '1' }),
+                  });
+                }
+              });
+            }
+
+            // Price category: always save via update_time_log
+            var pcSel = tr.querySelector('.ch-pc');
+            if (pcSel) {
+              pcSel.addEventListener('change', function () {
+                var rowName = pcSel.dataset.row;
+                var curMult = parseInt(tr.querySelector('.ch-mult').value) || 1;
                 apiMethod('custom_helpdesk.python_scripts.billing.portal_api.update_time_log', {
                   ticket_name: ticketId,
                   row_name: rowName,
-                  data: JSON.stringify({ multiplier: String(newMult), price_category: newPc }),
+                  data: JSON.stringify({ price_category: pcSel.value }),
                 }).then(function (res) {
                   if (res.message) {
                     var newEff = parseFloat(res.message.effective_duration) || 0;
-                    var newTotal = newEff * newMult;
                     var effCell = table.querySelector('.ch-eff-' + rowName);
                     var totCell = table.querySelector('.ch-tot-' + rowName);
                     if (effCell) effCell.textContent = newEff.toFixed(2);
-                    if (totCell) totCell.textContent = newTotal.toFixed(2);
+                    if (totCell) totCell.textContent = (newEff * curMult).toFixed(2);
                     renderBoth(ticketId);
                   }
                 });
               });
-            });
+            }
 
             // F2 — manual override handler
             var manualInput = tr.querySelector('.ch-manual');

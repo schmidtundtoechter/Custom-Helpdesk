@@ -244,6 +244,53 @@ def get_projects(ticket_name=None):
 
 
 @frappe.whitelist()
+def duplicate_time_log(ticket_name, row_name, copies):
+    """
+    Duplicate a Support Time Log row N times in the HD ticket.
+    Each copy has the same times/price/description but empty staff_member and multiplier=1.
+    The original row's multiplier is also reset to 1.
+    Called when the agent selects multiplier > 1 in the Zeiterfassung panel.
+    """
+    frappe.has_permission("HD Ticket", "write", ticket_name, throw=True)
+    copies = int(copies)
+    if copies < 1 or copies > 11:
+        frappe.throw(_("Ungültige Anzahl von Kopien."))
+
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    original = None
+    for row in ticket.support_time_logs:
+        if row.name == row_name:
+            original = row
+            break
+    else:
+        frappe.throw(_("Zeiteintrag nicht gefunden: {0}").format(row_name))
+
+    if original.gesperrt or original.is_invoiced:
+        frappe.throw(_("Gesperrte oder abgerechnete Einträge können nicht dupliziert werden."))
+
+    original.multiplier = "1"
+
+    for _ in range(copies):
+        ticket.append("support_time_logs", {
+            "start_time": original.start_time,
+            "end_time": original.end_time,
+            "manual_override": original.manual_override,
+            "description": original.description,
+            "price_category": original.price_category,
+            "project": original.project,
+            "task": original.get("task") or "",
+            "multiplier": "1",
+            "staff_member": "",
+            "entered_by": frappe.session.user,
+            "ruecksprache_erforderlich": 0,
+        })
+
+    ticket.flags.ignore_permissions = True
+    ticket.save()
+    return {"copies_created": copies}
+
+
+@frappe.whitelist()
 def get_project_tasks(project):
     """Return open Tasks for a given project."""
     return frappe.get_all(
