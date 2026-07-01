@@ -380,7 +380,7 @@
             '<th style="text-align:right;padding:4px 8px;">Gesamt (h)</th>' +
             '<th style="text-align:left;padding:4px 8px;">Mitarbeiter</th>' +
             '<th style="text-align:left;padding:4px 8px;">Projekt</th>' +
-            '<th style="text-align:left;padding:4px 8px;">Aufgabe</th>' +
+            '<th style="text-align:left;padding:4px 8px;">Vorgang</th>' +
             '<th style="text-align:center;padding:4px 8px;">Rücksprache</th>' +
             '<th style="padding:4px 8px;">Status</th>' +
           '</tr></thead><tbody></tbody>';

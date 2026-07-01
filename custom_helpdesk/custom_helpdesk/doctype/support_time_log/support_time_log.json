@@ -91,7 +91,7 @@
   {
    "fieldname": "task",
    "fieldtype": "Link",
-   "label": "Aufgabe",
+   "label": "Vorgang",
    "options": "Task"
   },
   {
