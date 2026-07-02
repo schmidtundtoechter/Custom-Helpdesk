@@ -168,9 +168,17 @@
     }).then(function (r) { return r.json(); });
   }
 
+  function apiGet(method) {
+    return fetch('/api/method/' + method, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+    }).then(function (r) { return r.json(); });
+  }
+
   // 2.1 load agents for filter dropdown
   function loadAgentsForFilter() {
-    api('custom_helpdesk.python_scripts.billing.portal_api.get_agents', {})
+    apiGet('custom_helpdesk.python_scripts.billing.portal_api.get_agents')
       .then(function (res) {
         agentList = res.message || [];
         var sel = document.getElementById('ch-agent-filter');
@@ -347,7 +355,7 @@
     if (agentList.length) {
       populateAgentSelect();
     } else {
-      api('custom_helpdesk.python_scripts.billing.portal_api.get_agents', {})
+      apiGet('custom_helpdesk.python_scripts.billing.portal_api.get_agents')
         .then(function (res) {
           agentList = res.message || [];
           populateAgentSelect();
