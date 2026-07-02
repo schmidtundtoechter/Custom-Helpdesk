@@ -31,6 +31,13 @@ def _agent_for_user(user):
 
 
 @frappe.whitelist()
+def get_csrf():
+    """Return (and ensure) the session CSRF token via a safe GET request."""
+    from frappe.sessions import get_csrf_token
+    return get_csrf_token()
+
+
+@frappe.whitelist()
 def get_agents():
     """
     Return active HD Agents.

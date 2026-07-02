@@ -149,8 +149,10 @@
   var calendar;
   var activeFilter = '';  // empty = show all
   var agentList = [];     // [{user, agent_name}, ...]
+  var __live_csrf = null; // fetched via GET on page load; null = not yet loaded
 
   function getCsrfToken() {
+    if (__live_csrf) return __live_csrf;
     if (__csrf_token && __csrf_token !== 'None') return __csrf_token;
     if (window.frappe && window.frappe.csrf_token) return window.frappe.csrf_token;
     return '';
@@ -217,6 +219,10 @@
   }
 
   (function initCalendar() {
+    // Fetch (and persist) CSRF token via GET so POST calls have a valid token
+    apiGet('custom_helpdesk.python_scripts.billing.portal_api.get_csrf')
+      .then(function (res) { if (res.message) __live_csrf = res.message; });
+
     loadAgentsForFilter();
 
     // Filter dropdown change
